@@ -7,9 +7,14 @@ class TextCNN(object):
     A CNN for text classification.
     Uses an embedding layer, followed by a convolutional, max-pooling and softmax layer.
     """
-    def __init__(
-      self, sequence_length, num_classes, vocab_size,
-      embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
+    def __init__(self
+                 , sequence_length
+                 , num_classes, vocab_size
+                 , filter_sizes
+                 , num_filters
+                 , embedding_size=None
+                 , pretrained_embedding=None
+                 , l2_reg_lambda=0.0):
 
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
@@ -21,9 +26,15 @@ class TextCNN(object):
 
         # Embedding layer
         with tf.device('/cpu:0'), tf.name_scope("embedding"):
-            W = tf.Variable(
-                tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0),
-                name="W")
+            if embedding_size:
+                W = tf.Variable(
+                        tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0),
+                        name="W")
+            else:
+                embedding_size = pretrained_embedding.shape[1]
+                W = tf.Variable(
+                        tf.constant(pretrained_embedding, dtype=np.float32),
+                        name="W")
             self.embedded_chars = tf.nn.embedding_lookup(W, self.input_x)
             self.embedded_chars_expanded = tf.expand_dims(self.embedded_chars, -1)
 

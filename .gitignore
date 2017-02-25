@@ -1,3 +1,6 @@
+data/word2vec/
+data/rt-polaritydata/word2vec.pickle
+
 *.npy
 runs/
 

@@ -1,7 +1,9 @@
-import numpy as np
 import re
-import itertools
-from collections import Counter
+
+import numpy as np
+from gensim.models import word2vec
+import json
+import pickle
 
 
 def clean_str(string):
@@ -51,7 +53,7 @@ def batch_iter(data, batch_size, num_epochs, shuffle=True):
     """
     data = np.array(data)
     data_size = len(data)
-    num_batches_per_epoch = int((len(data)-1)/batch_size) + 1
+    num_batches_per_epoch = int((len(data) - 1) / batch_size) + 1
     for epoch in range(num_epochs):
         # Shuffle the data at each epoch
         if shuffle:
@@ -63,3 +65,56 @@ def batch_iter(data, batch_size, num_epochs, shuffle=True):
             start_index = batch_num * batch_size
             end_index = min((batch_num + 1) * batch_size, data_size)
             yield shuffled_data[start_index:end_index]
+
+
+def load_word2vec(fname, vocab_dict):
+    """
+    Loads 300x1 word vecs from Google (Mikolov) word2vec
+    """
+    model = word2vec.KeyedVectors.load_word2vec_format(fname, binary=True)
+    word_vecs = {}
+    for word in vocab_dict:
+        if word in model:
+            word_vecs[word] = model[word]
+    return word_vecs
+
+
+def dump_json_word_vecs_np(fname, word_vecs):
+    word2vec_list = {}
+    for k, v in word_vecs.items():
+        word2vec_list[k] = v.tolist()
+
+    with open(fname, 'w') as f:
+        json.dump(word2vec_list, f)
+
+
+def load_json_word_vecs_np(fname):
+    with open(fname, 'r') as f:
+        word2vec_list = json.load(f)
+        word2vec_np = {}
+        for k, v in word2vec_list.items():
+            word2vec_np[k] = np.array(v, dtype=np.float32)
+        return word2vec_np
+
+
+def dump_pickle_word_vecs_np(fname, word_vecs):
+    with open(fname, 'wb') as f:
+        pickle.dump(word_vecs, f)
+
+
+def load_pickle_word_vecs_np(fname):
+    with open(fname, 'rb') as f:
+        return pickle.load(f)
+        # word_vecs64 = {}
+        # for k, v in word_vecs.items():
+        #     word_vecs64[k] = v.astype(np.float64)
+        # print(list(word_vecs64.items())[0][1].dtype)
+
+def add_unknown_words(word_vecs, vocab_dict, bound=0.25, k=300):
+    """
+    For words that occur in at least min_df documents, create a separate word vector.
+    0.25 is chosen so the unknown vectors have (approximately) same variance as pre-trained ones
+    """
+    for word in vocab_dict:
+        if word not in word_vecs:
+            word_vecs[word] = np.random.uniform(-bound, bound, k)
