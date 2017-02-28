@@ -6,7 +6,7 @@ import os
 import time
 import datetime
 import data_helpers
-from text_cnn import TextCNN
+from text_lstm2cnn import TextLSTM2CNN
 from tensorflow.contrib import learn
 from flags.train_flags import FLAGS
 
@@ -71,9 +71,10 @@ with tf.Graph().as_default():
     session_conf = tf.ConfigProto(
         allow_soft_placement=FLAGS.allow_soft_placement,
         log_device_placement=FLAGS.log_device_placement)
+    print("Sequence length = {}".format(x_train.shape[1]))
     sess = tf.Session(config=session_conf)
     with sess.as_default():
-        cnn = TextCNN(
+        lstm2cnn = TextLSTM2CNN(
             sequence_length=x_train.shape[1],
             num_classes=y_train.shape[1],
             vocab_size=len(vocab_processor.vocabulary_),
@@ -82,11 +83,12 @@ with tf.Graph().as_default():
             filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
             num_filters=FLAGS.num_filters,
             l2_reg_lambda=FLAGS.l2_reg_lambda)
+        print("Model is initialized")
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
         optimizer = tf.train.AdamOptimizer(1e-3)
-        grads_and_vars = optimizer.compute_gradients(cnn.loss)
+        grads_and_vars = optimizer.compute_gradients(lstm2cnn.loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
         # Keep track of gradient values and sparsity (optional)
@@ -105,8 +107,8 @@ with tf.Graph().as_default():
         print("Writing to {}\n".format(out_dir))
 
         # Summaries for loss and accuracy
-        loss_summary = tf.summary.scalar("loss", cnn.loss)
-        acc_summary = tf.summary.scalar("accuracy", cnn.accuracy)
+        loss_summary = tf.summary.scalar("loss", lstm2cnn.loss)
+        acc_summary = tf.summary.scalar("accuracy", lstm2cnn.accuracy)
 
         # Train Summaries
         train_summary_op = tf.summary.merge([loss_summary, acc_summary, grad_summaries_merged])
@@ -137,12 +139,13 @@ with tf.Graph().as_default():
             A single training step
             """
             feed_dict = {
-                cnn.input_x: x_batch,
-                cnn.input_y: y_batch,
-                cnn.dropout_keep_prob: FLAGS.dropout_keep_prob
+                lstm2cnn.input_x: x_batch,
+                lstm2cnn.input_y: y_batch,
+                lstm2cnn.dropout_keep_prob: FLAGS.dropout_keep_prob,
+                lstm2cnn.batch_size_: len(x_batch)
             }
             _, step, summaries, loss, accuracy = sess.run(
-                [train_op, global_step, train_summary_op, cnn.loss, cnn.accuracy],
+                [train_op, global_step, train_summary_op, lstm2cnn.loss, lstm2cnn.accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
             print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
@@ -154,12 +157,13 @@ with tf.Graph().as_default():
             Evaluates model on a dev set
             """
             feed_dict = {
-                cnn.input_x: x_batch,
-                cnn.input_y: y_batch,
-                cnn.dropout_keep_prob: 1.0
+                lstm2cnn.input_x: x_batch,
+                lstm2cnn.input_y: y_batch,
+                lstm2cnn.dropout_keep_prob: 1.0,
+                lstm2cnn.batch_size_: len(x_batch)
             }
             step, summaries, loss, accuracy = sess.run(
-                [global_step, dev_summary_op, cnn.loss, cnn.accuracy],
+                [global_step, dev_summary_op, lstm2cnn.loss, lstm2cnn.accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
             print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
