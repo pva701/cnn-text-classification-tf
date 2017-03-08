@@ -80,9 +80,8 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
-            lstm_parameters=[(128, 3), (128, 5), (128, 5)],
-            lstm_strides=[1, 1, 1],
-            #lstm_parameters=[(500, 9)],
+            lstm_parameters=[(500, 6), (500, 5), (128, 5)],
+            lstm_strides=[1, 2, 1],
             l2_reg_lambda=FLAGS.l2_reg_lambda)
         print("Model is initialized")
 
@@ -170,20 +169,24 @@ with tf.Graph().as_default():
             print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
             if writer:
                 writer.add_summary(summaries, step)
+            return accuracy
 
 
         # Generate batches
         batches = data_helpers.batch_iter(
             list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
         # Training loop. For each batch...
+        max_acc=0.0
         for batch in batches:
             x_batch, y_batch = zip(*batch)
             train_step(x_batch, y_batch)
             current_step = tf.train.global_step(sess, global_step)
             if current_step % FLAGS.evaluate_every == 0:
                 print("\nEvaluation:")
-                dev_step(x_dev, y_dev, writer=dev_summary_writer)
+                acc = dev_step(x_dev, y_dev, writer=dev_summary_writer)
+                max_acc = max(max_acc, acc)
                 print("")
+                print("Max accuracy {}\n".format(max_acc))
             if current_step % FLAGS.checkpoint_every == 0:
                 path = saver.save(sess, checkpoint_prefix, global_step=current_step)
                 print("Saved model checkpoint to {}\n".format(path))
