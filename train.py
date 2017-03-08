@@ -80,7 +80,8 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
-            lstm_parameters=[(128, 9), (128, 5)],
+            lstm_parameters=[(128, 3), (128, 5), (128, 5)],
+            lstm_strides=[1, 1, 1],
             #lstm_parameters=[(500, 9)],
             l2_reg_lambda=FLAGS.l2_reg_lambda)
         print("Model is initialized")
