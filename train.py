@@ -6,7 +6,7 @@ import os
 import time
 import datetime
 import data_helpers
-from text_lstm2cnn import TextLSTM2CNN
+from lstm_over_lstm import LstmOverLstm
 from tensorflow.contrib import learn
 from flags.train_flags import FLAGS
 
@@ -74,14 +74,14 @@ with tf.Graph().as_default():
     print("Sequence length = {}".format(x_train.shape[1]))
     sess = tf.Session(config=session_conf)
     with sess.as_default():
-        lstm2cnn = TextLSTM2CNN(
+        lstm2cnn = LstmOverLstm(
             sequence_length=x_train.shape[1],
             num_classes=y_train.shape[1],
             vocab_size=len(vocab_processor.vocabulary_),
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
-            filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
-            num_filters=FLAGS.num_filters,
+            lstm_parameters=[(128, 9), (128, 5)],
+            #lstm_parameters=[(500, 9)],
             l2_reg_lambda=FLAGS.l2_reg_lambda)
         print("Model is initialized")
 
