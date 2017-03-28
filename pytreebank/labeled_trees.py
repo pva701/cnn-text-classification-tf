@@ -5,7 +5,10 @@ import json
 
 try:
     from PIL import ImageFont
+
     font = ImageFont.core.getfont("/Library/Fonts/Georgia.ttf", 15)
+
+
     def text_size(text):
         return max(4, font.getsize(text)[0][0])
 except Exception:
@@ -15,7 +18,7 @@ except Exception:
 
 
 class LabeledTree(object):
-    SCORE_MAPPING = [-12.5,-6.25,0.0,6.25,12.5]
+    SCORE_MAPPING = [-12.5, -6.25, 0.0, 6.25, 12.5]
 
     def __init__(self,
                  depth=0,
@@ -24,13 +27,13 @@ class LabeledTree(object):
                  children=None,
                  parent=None,
                  udepth=1):
-        self.label    = label
+        self.label = label
         self.children = children if children != None else []
         self.general_children = []
         self.text = text
-        self.parent   = parent
-        self.depth    = depth
-        self.udepth   = udepth
+        self.parent = parent
+        self.depth = depth
+        self.udepth = udepth
 
     def uproot(tree):
         """
@@ -62,12 +65,12 @@ class LabeledTree(object):
         Deep Copy of a LabeledTree
         """
         return LabeledTree(
-            udepth = self.udepth,
-            depth = self.depth,
-            text = self.text,
-            label = self.label,
-            children = self.children.copy() if self.children != None else [],
-            parent = self.parent)
+            udepth=self.udepth,
+            depth=self.depth,
+            text=self.text,
+            label=self.label,
+            children=self.children.copy() if self.children != None else [],
+            parent=self.parent)
 
     def add_child(self, child):
         """
@@ -88,6 +91,9 @@ class LabeledTree(object):
             yield self
         else:
             yield self
+
+    def has_children(self):
+        return len(self.children) > 0
 
     def lowercase(self):
         """
@@ -143,7 +149,7 @@ class LabeledTree(object):
     def display(self):
         from IPython.display import Javascript, display
 
-        display(Javascript("createTrees(["+self.to_json()+"])"))
+        display(Javascript("createTrees([" + self.to_json() + "])"))
         display(Javascript("updateTrees()"))
 
     def to_lines(self):
@@ -181,12 +187,12 @@ class LabeledTree(object):
                 rep += str(child)
             return rep + ")"
         else:
-            text = self.text\
-                .replace("(", "-LRB-")\
-                .replace(")", "-RRB-")\
-                .replace("{", "-LCB-")\
-                .replace("}", "-RCB-")\
-                .replace("[", "-LSB-")\
+            text = self.text \
+                .replace("(", "-LRB-") \
+                .replace(")", "-RRB-") \
+                .replace("{", "-LCB-") \
+                .replace("}", "-RCB-") \
+                .replace("[", "-LSB-") \
                 .replace("]", "-RSB-")
 
             return ("(%d %s) " % (self.label, text))
