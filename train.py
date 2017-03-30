@@ -6,9 +6,11 @@ import os
 import time
 import datetime
 import data_helpers
-from text_lstm2cnn import TextLSTM2CNN
+from tree_simple import BinaryTreeSimple
 from tensorflow.contrib import learn
 from flags.train_flags import FLAGS
+import pytreebank
+import sys
 
 print("\nParameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
@@ -21,18 +23,25 @@ print("")
 
 # Load data
 print("Loading data...")
-x_text, y = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
+dataset = pytreebank.load_sst(FLAGS.sst_path)
+x_train = [x.lowercase() for x in dataset["train"]]
+x_dev = [x.lowercase() for x in dataset["dev"]]
+x_test = [x.lowercase() for x in dataset["test"]]
+n = len(x_train)
 
 # Build vocabulary
-max_document_length = max([len(x.split(" ")) for x in x_text])
+x_train_words = [x.to_words() for x in x_train]
+x_train_text = [x.as_text() for x in x_train]
+
+max_document_length = max([len(x) for x in x_train_words])
 vocab_processor = learn.preprocessing.VocabularyProcessor(max_document_length)
-x = np.array(list(vocab_processor.fit_transform(x_text)))
+x = np.array(list(vocab_processor.fit_transform(x_train_text)))
 vocab_dict = vocab_processor.vocabulary_._mapping
 vocab_size = len(vocab_dict)
 
 word2vec_matrix = None
 if FLAGS.embedding_dim is None:  # use pretrained
-    if FLAGS.dataset_word2vec_path is None:  # if no word2vec for current dataset
+    if not os.path.exists(FLAGS.dataset_word2vec_path):  # if no word2vec for current dataset
         print("Loading word2vec...")
         word2vec = data_helpers.load_word2vec(FLAGS.word2vec_path, vocab_dict)
         print("Loading word2vec finished")
@@ -50,20 +59,16 @@ if FLAGS.embedding_dim is None:  # use pretrained
         list_vecs[idx] = word2vec[word]
     word2vec_matrix = np.array(list_vecs)
 
-# Randomly shuffle data
-np.random.seed(10)
-shuffle_indices = np.random.permutation(np.arange(len(y)))
-x_shuffled = x[shuffle_indices]
-y_shuffled = y[shuffle_indices]
-
-# Split train/test set
-# TODO: This is very crude, should use cross-validation
-dev_sample_index = -1 * int(FLAGS.dev_sample_percentage * float(len(y)))
-x_train, x_dev = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
-y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
 print("Vocabulary Size: {:d}".format(vocab_size))
-print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
+print("Train/Dev/Test split: {:d}/{:d}/{:d}".format(len(x_train), len(x_dev), len(x_test)))
 
+print("To sample")
+for x in x_train:
+    x.to_sample(vocab_dict)
+
+for x in x_dev:
+    x.to_sample(vocab_dict)
+print("To sample finished")
 
 # Training
 # ==================================================
@@ -71,24 +76,20 @@ with tf.Graph().as_default():
     session_conf = tf.ConfigProto(
         allow_soft_placement=FLAGS.allow_soft_placement,
         log_device_placement=FLAGS.log_device_placement)
-    print("Sequence length = {}".format(x_train.shape[1]))
     sess = tf.Session(config=session_conf)
     with sess.as_default():
-        lstm2cnn = TextLSTM2CNN(
-            sequence_length=x_train.shape[1],
-            num_classes=y_train.shape[1],
+        tree_nn = BinaryTreeSimple(
+            num_classes=5,
             vocab_size=len(vocab_processor.vocabulary_),
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
-            filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
-            num_filters=FLAGS.num_filters,
             l2_reg_lambda=FLAGS.l2_reg_lambda)
         print("Model is initialized")
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
         optimizer = tf.train.AdamOptimizer(1e-3)
-        grads_and_vars = optimizer.compute_gradients(lstm2cnn.loss)
+        grads_and_vars = optimizer.compute_gradients(tree_nn.loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
         # Keep track of gradient values and sparsity (optional)
@@ -107,8 +108,10 @@ with tf.Graph().as_default():
         print("Writing to {}\n".format(out_dir))
 
         # Summaries for loss and accuracy
-        loss_summary = tf.summary.scalar("loss", lstm2cnn.loss)
-        acc_summary = tf.summary.scalar("accuracy", lstm2cnn.accuracy)
+        loss_summary = tf.summary.scalar("loss", tree_nn.loss)
+        acc_summary = tf.summary.scalar("accuracy", tree_nn.accuracy)
+        #root_loss_summary = tf.summary.scalar("root_loss", tree_nn.root_loss)
+        #root_acc_summary = tf.summary.scalar("root_accuracy", tree_nn.root_accuracy)
 
         # Train Summaries
         train_summary_op = tf.summary.merge([loss_summary, acc_summary, grad_summaries_merged])
@@ -133,56 +136,104 @@ with tf.Graph().as_default():
         # Initialize all variables
         sess.run(tf.global_variables_initializer())
 
-
-        def train_step(x_batch, y_batch):
+        def train_sample(tree):
             """
             A single training step
             """
+            x, left, right, labels = tree.to_sample(vocab_dict)
             feed_dict = {
-                lstm2cnn.input_x: x_batch,
-                lstm2cnn.input_y: y_batch,
-                lstm2cnn.dropout_keep_prob: FLAGS.dropout_keep_prob,
-                lstm2cnn.batch_size_: len(x_batch)
+                tree_nn.words: x,
+                tree_nn.n_words: len(x),
+                tree_nn.left: left,
+                tree_nn.right: right,
+                tree_nn.labels: labels,
+                tree_nn.dropout_keep_prob: FLAGS.dropout_keep_prob
             }
-            _, step, summaries, loss, accuracy = sess.run(
-                [train_op, global_step, train_summary_op, lstm2cnn.loss, lstm2cnn.accuracy],
+            _, step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
+                [train_op,
+                 global_step,
+                 train_summary_op,
+                 tree_nn.loss,
+                 tree_nn.accuracy,
+                 tree_nn.root_loss,
+                 tree_nn.root_accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
-            print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
+            print("{}: step {}, loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".format(
+                time_str,
+                step,
+                loss,
+                accuracy,
+                root_loss,
+                root_acc))
+
             train_summary_writer.add_summary(summaries, step)
 
-
-        def dev_step(x_batch, y_batch, writer=None):
+        def dev_sample(tree, writer=None):
             """
             Evaluates model on a dev set
             """
+            x, left, right, labels = tree.to_sample(vocab_dict)
             feed_dict = {
-                lstm2cnn.input_x: x_batch,
-                lstm2cnn.input_y: y_batch,
-                lstm2cnn.dropout_keep_prob: 1.0,
-                lstm2cnn.batch_size_: len(x_batch)
+                tree_nn.words: x,
+                tree_nn.n_words: len(x),
+                tree_nn.left: left,
+                tree_nn.right: right,
+                tree_nn.labels: labels,
+                tree_nn.dropout_keep_prob: 1.0
             }
-            step, summaries, loss, accuracy = sess.run(
-                [global_step, dev_summary_op, lstm2cnn.loss, lstm2cnn.accuracy],
+
+            step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
+                [global_step,
+                 dev_summary_op,
+                 tree_nn.loss,
+                 tree_nn.accuracy,
+                 tree_nn.root_loss,
+                 tree_nn.root_accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
-            print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
+            print("{}: step {}, loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
+                  format(time_str,
+                         step,
+                         loss,
+                         accuracy,
+                         root_loss,
+                         root_acc))
             if writer:
                 writer.add_summary(summaries, step)
+            return loss, root_loss, accuracy, root_acc
 
+        np.random.seed(1)
+        for epoch in range(FLAGS.num_epochs):
+            for sample_id in np.random.permutation(n):
+                train_sample(x_train[sample_id])
+                current_step = tf.train.global_step(sess, global_step)
 
-        # Generate batches
-        batches = data_helpers.batch_iter(
-            list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
-        # Training loop. For each batch...
-        for batch in batches:
-            x_batch, y_batch = zip(*batch)
-            train_step(x_batch, y_batch)
-            current_step = tf.train.global_step(sess, global_step)
-            if current_step % FLAGS.evaluate_every == 0:
-                print("\nEvaluation:")
-                dev_step(x_dev, y_dev, writer=dev_summary_writer)
-                print("")
-            if current_step % FLAGS.checkpoint_every == 0:
-                path = saver.save(sess, checkpoint_prefix, global_step=current_step)
-                print("Saved model checkpoint to {}\n".format(path))
+                if current_step % FLAGS.evaluate_every == 0:
+                    print("\nEvaluation:")
+                    sum_loss = 0.0
+                    sum_root_loss = 0.0
+                    sum_acc = 0.0
+                    sum_root_acc = 0.0
+                    examples = 0
+                    for ex in x_dev:
+                        l, rl, ac, rac = dev_sample(ex, writer=dev_summary_writer)
+                        sum_loss += l
+                        sum_root_loss += rl
+                        sum_acc += ac
+                        sum_root_acc += rac
+                        examples += 1
+                    sum_loss /= examples
+                    sum_root_loss /= examples
+                    sum_acc /= examples
+                    sum_root_acc /= examples
+
+                    print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
+                          format(sum_loss, sum_acc, sum_root_loss, sum_root_acc))
+                    print("")
+
+                if current_step % FLAGS.checkpoint_every == 0:
+                    path = saver.save(sess, checkpoint_prefix, global_step=current_step)
+                    print("Saved model checkpoint to {}\n".format(path))
+
+            print("Epoch #" + str(epoch) + " has finished")

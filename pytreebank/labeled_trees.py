@@ -34,6 +34,8 @@ class LabeledTree(object):
         self.parent = parent
         self.depth = depth
         self.udepth = udepth
+        self.text_list = None
+        self.sample = None
 
     def uproot(tree):
         """
@@ -105,6 +107,72 @@ class LabeledTree(object):
                 child.lowercase()
         else:
             self.text = self.text.lower()
+        return self
+
+    def to_words(self):
+        if self.text_list is not None:
+            return self.text_list
+        self.text_list = []
+
+        def rec(node):
+            if len(node.children) == 0:
+                self.text_list.append(node.text)
+            else:
+                for child in node.children:
+                    rec(child)
+
+        rec(self)
+        return self.text_list
+
+    def as_text(self):
+        words = self.to_words()
+        return " ".join(words)
+
+    def to_sample(self, vocab):
+        if self.sample is not None:
+            return self.sample
+
+        n = len(self.to_words())
+        words_id = [None]*n
+        left = []
+        right = []
+        labels = [None] * (2 * n - 1)
+        self.list_num = 0
+        self.vert_num = n
+
+        def rec(node):
+            if len(node.children) == 0:
+                if node.text in vocab:
+                    words_id[self.list_num] = vocab[node.text]
+                else:
+                    words_id[self.list_num] = 0
+
+                l = [0]*5
+                l[node.label] = 1
+                labels[self.list_num] = l
+
+                self.list_num += 1
+                return self.list_num - 1
+            else:
+                assert len(node.children) == 2
+                l_n = rec(node.children[0])
+                r_n = rec(node.children[1])
+                left.append(l_n)
+                right.append(r_n)
+
+                l = [0]*5
+                l[node.label] = 1
+                labels[self.vert_num] = l
+
+                self.vert_num += 1
+                return self.vert_num - 1
+        rec(self)
+        assert self.list_num == n
+        assert self.vert_num == 2 * n - 1
+        assert len(left) == len(right) and len(left) + 1 == len(words_id)
+        self.sample = (words_id, left, right, labels)
+        return self.sample
+
 
     def to_dict(self, index=0):
         """
