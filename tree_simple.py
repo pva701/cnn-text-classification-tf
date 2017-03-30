@@ -8,7 +8,7 @@ class BinaryTreeSimple(object):
                                 , vocab_size
                                 , embedding_size=None
                                 , pretrained_embedding=None):
-        with tf.variable_scope("bin-tree-simple") as scope:
+        with tf.variable_scope("internal-state"):
             # Embedding layer
             with tf.device('/cpu:0'), tf.name_scope("embedding"):
                 if embedding_size:
@@ -57,7 +57,7 @@ class BinaryTreeSimple(object):
         self.labels = tf.placeholder(tf.int32, [None, num_classes], "labels")  # 2n-1x5
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
-        with tf.variable_scope("bin-tree-simple") as scope:
+        with tf.variable_scope("internal-state") as scope:
             scope.reuse_variables()
             with tf.name_scope("embedding"):
                 embedding_matrix = tf.get_variable("embedding")
@@ -101,11 +101,13 @@ class BinaryTreeSimple(object):
                 losses = \
                     tf.nn.softmax_cross_entropy_with_logits(
                         labels=self.labels,
-                        logits=self.scores)
+                        logits=self.scores,
+                        name="losses")
                 self.root_loss = \
                     tf.nn.softmax_cross_entropy_with_logits(
                         labels=self.labels[-1],
-                        logits=self.scores[-1])
+                        logits=self.scores[-1],
+                        name="root_loss")
 
                 self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
 
@@ -113,7 +115,8 @@ class BinaryTreeSimple(object):
             with tf.name_scope("accuracy"):
                 correct_predictions = tf.equal(self.predictions, tf.argmax(self.labels, 1))
                 self.root_accuracy = tf.equal(self.predictions[-1],
-                                              tf.argmax(self.labels[-1], axis=0))
+                                              tf.argmax(self.labels[-1], axis=0),
+                                              name="root_accuracy")
                 self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
 
     def data_type(self):

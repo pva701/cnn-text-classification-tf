@@ -2,7 +2,6 @@
 
 import os
 import time
-import datetime
 
 import tensorflow as tf
 import numpy as np
@@ -38,8 +37,122 @@ def eval_dataset(x_dataset, evaluator):
     sum_root_acc /= examples
     return sum_loss, sum_acc, sum_root_loss, sum_root_acc
 
+
+def train_sample(tree, tree_nn, vocab_dict, summary=None):
+    x, left, right, labels = tree.to_sample(vocab_dict)
+    feed_dict = {
+        tree_nn.words: x,
+        tree_nn.n_words: len(x),
+        tree_nn.left: left,
+        tree_nn.right: right,
+        tree_nn.labels: labels,
+        tree_nn.dropout_keep_prob: FLAGS.dropout_keep_prob
+    }
+
+    if summary:
+        _, step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
+            [train_op,
+             global_step,
+             summary[1],
+             tree_nn.loss,
+             tree_nn.accuracy,
+             tree_nn.root_loss,
+             tree_nn.root_accuracy],
+            feed_dict)
+    else:
+        _, step, loss, accuracy, root_loss, root_acc = sess.run(
+            [train_op,
+             global_step,
+             tree_nn.loss,
+             tree_nn.accuracy,
+             tree_nn.root_loss,
+             tree_nn.root_accuracy],
+            feed_dict)
+
+    if summary:
+        summary[0].add_summary(summaries, step)
+    return loss, accuracy, root_loss, root_acc
+
+
+def dev_sample(tree, tree_nn, vocab_dict, summary=None):
+    """
+    Evaluates model on a dev set
+    """
+    x, left, right, labels = tree.to_sample(vocab_dict)
+    feed_dict = {
+        tree_nn.words: x,
+        tree_nn.n_words: len(x),
+        tree_nn.left: left,
+        tree_nn.right: right,
+        tree_nn.labels: labels,
+        tree_nn.dropout_keep_prob: 1.0
+    }
+
+    if summary:
+        step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
+            [global_step,
+             summary[1],
+             tree_nn.loss,
+             tree_nn.accuracy,
+             tree_nn.root_loss,
+             tree_nn.root_accuracy],
+            feed_dict)
+    else:
+        step, loss, accuracy, root_loss, root_acc = sess.run(
+            [global_step,
+             tree_nn.loss,
+             tree_nn.accuracy,
+             tree_nn.root_loss,
+             tree_nn.root_accuracy],
+            feed_dict)
+
+    if summary:
+        summary[0].add_summary(summaries, step)
+    return loss, accuracy, root_loss, root_acc
+
+
+def init_summaries():
+    # Keep track of gradient values and sparsity (optional)
+    grad_summaries = []
+    for g, v in grads_and_vars:
+        if g is not None:
+            grad_hist_summary = tf.summary.histogram("{}/grad/hist".format(v.name), g)
+            sparsity_summary = tf.summary.scalar("{}/grad/sparsity".format(v.name), tf.nn.zero_fraction(g))
+            grad_summaries.append(grad_hist_summary)
+            grad_summaries.append(sparsity_summary)
+    grad_summaries_merged = tf.summary.merge(grad_summaries)
+
+    # Summaries for loss and accuracy
+    loss_summary = tf.summary.scalar("loss", tree_nn.loss)
+    acc_summary = tf.summary.scalar("accuracy", tree_nn.accuracy)
+    # root_loss_summary = tf.summary.scalar("root_loss", tree_nn.root_loss)
+    # root_acc_summary = tf.summary.scalar("root_accuracy", tree_nn.root_accuracy)
+
+    # Train Summaries
+    train_summary_op = tf.summary.merge([loss_summary, acc_summary, grad_summaries_merged])
+    train_summary_dir = os.path.join(out_dir, "summaries", "train")
+    train_summary_writer = tf.summary.FileWriter(train_summary_dir, sess.graph)
+
+    # Dev summaries
+    dev_summary_op = tf.summary.merge([loss_summary, acc_summary])
+    dev_summary_dir = os.path.join(out_dir, "summaries", "dev")
+    dev_summary_writer = tf.summary.FileWriter(dev_summary_dir, sess.graph)
+    return train_summary_writer, train_summary_op, dev_summary_writer, dev_summary_op
+
+
 # Data Preparation
 # ==================================================
+
+# Output directory for models and summaries
+timestamp = str(int(time.time()))
+out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
+print("Writing to {}\n".format(out_dir))
+
+# Checkpoint directory. Tensorflow assumes this directory already exists so we need to create it
+checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
+checkpoint_prefix = os.path.join(checkpoint_dir, "model")
+if not os.path.exists(checkpoint_dir):
+    os.makedirs(checkpoint_dir)
 
 # Load data
 print("Loading data...")
@@ -58,6 +171,9 @@ vocab_processor = learn.preprocessing.VocabularyProcessor(max_document_length)
 x = np.array(list(vocab_processor.fit_transform(x_train_text)))
 vocab_dict = vocab_processor.vocabulary_._mapping
 vocab_size = len(vocab_dict)
+
+# Write vocabulary
+vocab_processor.save(os.path.join(out_dir, "vocab"))
 
 word2vec_matrix = None
 if FLAGS.embedding_dim is None:  # use pretrained
@@ -80,7 +196,8 @@ if FLAGS.embedding_dim is None:  # use pretrained
     word2vec_matrix = np.array(list_vecs)
 
 print("Vocabulary Size: {:d}".format(vocab_size))
-print("Train/Dev/Test split: {:d}/{:d}/{:d}".format(len(x_train), len(x_dev), len(x_test)))
+print("Train/Dev/Test split: {:d}/{:d}/{:d}".
+      format(len(x_train), len(x_dev), len(x_test)))
 
 print("To sample")
 for x in x_train:
@@ -112,101 +229,11 @@ with tf.Graph().as_default():
         grads_and_vars = optimizer.compute_gradients(tree_nn.loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
-        # Keep track of gradient values and sparsity (optional)
-        grad_summaries = []
-        for g, v in grads_and_vars:
-            if g is not None:
-                grad_hist_summary = tf.summary.histogram("{}/grad/hist".format(v.name), g)
-                sparsity_summary = tf.summary.scalar("{}/grad/sparsity".format(v.name), tf.nn.zero_fraction(g))
-                grad_summaries.append(grad_hist_summary)
-                grad_summaries.append(sparsity_summary)
-        grad_summaries_merged = tf.summary.merge(grad_summaries)
+        train_summary_writer, train_summary_op, dev_summary_writer, dev_summary_op = init_summaries()
 
-        # Output directory for models and summaries
-        timestamp = str(int(time.time()))
-        out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
-        print("Writing to {}\n".format(out_dir))
-
-        # Summaries for loss and accuracy
-        loss_summary = tf.summary.scalar("loss", tree_nn.loss)
-        acc_summary = tf.summary.scalar("accuracy", tree_nn.accuracy)
-        #root_loss_summary = tf.summary.scalar("root_loss", tree_nn.root_loss)
-        #root_acc_summary = tf.summary.scalar("root_accuracy", tree_nn.root_accuracy)
-
-        # Train Summaries
-        train_summary_op = tf.summary.merge([loss_summary, acc_summary, grad_summaries_merged])
-        train_summary_dir = os.path.join(out_dir, "summaries", "train")
-        train_summary_writer = tf.summary.FileWriter(train_summary_dir, sess.graph)
-
-        # Dev summaries
-        dev_summary_op = tf.summary.merge([loss_summary, acc_summary])
-        dev_summary_dir = os.path.join(out_dir, "summaries", "dev")
-        dev_summary_writer = tf.summary.FileWriter(dev_summary_dir, sess.graph)
-
-        # Checkpoint directory. Tensorflow assumes this directory already exists so we need to create it
-        checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
-        checkpoint_prefix = os.path.join(checkpoint_dir, "model")
-        if not os.path.exists(checkpoint_dir):
-            os.makedirs(checkpoint_dir)
         saver = tf.train.Saver(tf.global_variables(), max_to_keep=FLAGS.num_checkpoints)
-
-        # Write vocabulary
-        vocab_processor.save(os.path.join(out_dir, "vocab"))
-
         # Initialize all variables
         sess.run(tf.global_variables_initializer())
-
-        def train_sample(tree):
-            """
-            A single training step
-            """
-            x, left, right, labels = tree.to_sample(vocab_dict)
-            feed_dict = {
-                tree_nn.words: x,
-                tree_nn.n_words: len(x),
-                tree_nn.left: left,
-                tree_nn.right: right,
-                tree_nn.labels: labels,
-                tree_nn.dropout_keep_prob: FLAGS.dropout_keep_prob
-            }
-            _, step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
-                [train_op,
-                 global_step,
-                 train_summary_op,
-                 tree_nn.loss,
-                 tree_nn.accuracy,
-                 tree_nn.root_loss,
-                 tree_nn.root_accuracy],
-                feed_dict)
-
-            train_summary_writer.add_summary(summaries, step)
-            return loss, accuracy, root_loss, root_acc
-
-        def dev_sample(tree, writer=None):
-            """
-            Evaluates model on a dev set
-            """
-            x, left, right, labels = tree.to_sample(vocab_dict)
-            feed_dict = {
-                tree_nn.words: x,
-                tree_nn.n_words: len(x),
-                tree_nn.left: left,
-                tree_nn.right: right,
-                tree_nn.labels: labels,
-                tree_nn.dropout_keep_prob: 1.0
-            }
-
-            step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
-                [global_step,
-                 dev_summary_op,
-                 tree_nn.loss,
-                 tree_nn.accuracy,
-                 tree_nn.root_loss,
-                 tree_nn.root_accuracy],
-                feed_dict)
-            if writer:
-                writer.add_summary(summaries, step)
-            return loss, accuracy, root_loss, root_acc
 
         np.random.seed(1)
         TRAIN_MEAS_BATCH = 100
@@ -218,7 +245,8 @@ with tf.Graph().as_default():
 
         for epoch in range(FLAGS.num_epochs):
             for sample_id in np.random.permutation(n):
-                lt, at, rlt, rat = train_sample(x_train[sample_id])
+                lt, at, rlt, rat = train_sample(x_train[sample_id], tree_nn, vocab_dict,
+                                                summary=(train_summary_writer, train_summary_op))
                 sum_train_loss += lt
                 sum_train_acc += at
                 sum_train_root_loss += rlt
@@ -243,14 +271,15 @@ with tf.Graph().as_default():
 
                 if current_step % FLAGS.evaluate_every == 0:
                     dev_loss, dev_acc, dev_root_loss, dev_root_acc = \
-                        eval_dataset(x_dev, lambda ex: dev_sample(ex, writer=dev_summary_writer))
+                        eval_dataset(x_dev, lambda ex: dev_sample(ex, tree_nn, vocab_dict,
+                                                                  summary=(dev_summary_writer, dev_summary_op)))
                     print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(dev_loss, dev_acc, dev_root_acc, dev_root_acc))
                     print("")
 
                 if current_step % FLAGS.test_evaluate_every == 0:
                     test_loss, test_acc, test_root_loss, test_root_acc = \
-                        eval_dataset(x_test, lambda ex: dev_sample(ex))
+                        eval_dataset(x_test, lambda ex: dev_sample(ex, tree_nn, vocab_dict))
                     print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(test_loss, test_acc, test_root_acc, test_root_acc))
                     print("")
