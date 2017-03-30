@@ -1,22 +1,42 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
-import tensorflow as tf
-import numpy as np
 import os
 import time
 import datetime
+
+import tensorflow as tf
+import numpy as np
+from tensorflow.contrib import learn
+
 import data_helpers
 from tree_simple import BinaryTreeSimple
-from tensorflow.contrib import learn
 from flags.train_flags import FLAGS
 import pytreebank
-import sys
 
 print("\nParameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
     print("{}={}".format(attr.upper(), value))
 print("")
 
+
+def eval_dataset(x_dataset, evaluator):
+    sum_loss = 0.0
+    sum_root_loss = 0.0
+    sum_acc = 0.0
+    sum_root_acc = 0.0
+    examples = 0
+    for ex in x_dataset:
+        l, ac, rl, rac = evaluator(ex)
+        sum_loss += l
+        sum_acc += ac
+        sum_root_loss += rl
+        sum_root_acc += rac
+        examples += 1
+    sum_loss /= examples
+    sum_acc /= examples
+    sum_root_loss /= examples
+    sum_root_acc /= examples
+    return sum_loss, sum_acc, sum_root_loss, sum_root_acc
 
 # Data Preparation
 # ==================================================
@@ -158,16 +178,9 @@ with tf.Graph().as_default():
                  tree_nn.root_loss,
                  tree_nn.root_accuracy],
                 feed_dict)
-            time_str = datetime.datetime.now().isoformat()
-            print("{}: step {}, loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".format(
-                time_str,
-                step,
-                loss,
-                accuracy,
-                root_loss,
-                root_acc))
 
             train_summary_writer.add_summary(summaries, step)
+            return loss, accuracy, root_loss, root_acc
 
         def dev_sample(tree, writer=None):
             """
@@ -191,49 +204,59 @@ with tf.Graph().as_default():
                  tree_nn.root_loss,
                  tree_nn.root_accuracy],
                 feed_dict)
-            time_str = datetime.datetime.now().isoformat()
-            print("{}: step {}, loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
-                  format(time_str,
-                         step,
-                         loss,
-                         accuracy,
-                         root_loss,
-                         root_acc))
             if writer:
                 writer.add_summary(summaries, step)
-            return loss, root_loss, accuracy, root_acc
+            return loss, accuracy, root_loss, root_acc
 
         np.random.seed(1)
+        TRAIN_MEAS_BATCH = 100
+        sum_train_loss = 0.0
+        sum_train_root_loss = 0.0
+        sum_train_acc = 0.0
+        sum_train_root_acc = 0.0
+        batch_time = time.time()
+
         for epoch in range(FLAGS.num_epochs):
             for sample_id in np.random.permutation(n):
-                train_sample(x_train[sample_id])
+                lt, at, rlt, rat = train_sample(x_train[sample_id])
+                sum_train_loss += lt
+                sum_train_acc += at
+                sum_train_root_loss += rlt
+                sum_train_root_acc += rat
+
                 current_step = tf.train.global_step(sess, global_step)
 
-                if current_step % FLAGS.evaluate_every == 0:
-                    print("\nEvaluation:")
-                    sum_loss = 0.0
-                    sum_root_loss = 0.0
-                    sum_acc = 0.0
-                    sum_root_acc = 0.0
-                    examples = 0
-                    for ex in x_dev:
-                        l, rl, ac, rac = dev_sample(ex, writer=dev_summary_writer)
-                        sum_loss += l
-                        sum_root_loss += rl
-                        sum_acc += ac
-                        sum_root_acc += rac
-                        examples += 1
-                    sum_loss /= examples
-                    sum_root_loss /= examples
-                    sum_acc /= examples
-                    sum_root_acc /= examples
+                if current_step % TRAIN_MEAS_BATCH == 0:
+                    print("{} 100-batch: time {:g} sec, loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
+                          format(current_step // TRAIN_MEAS_BATCH,
+                                 time.time() - batch_time,
+                                 sum_train_loss / TRAIN_MEAS_BATCH,
+                                 sum_train_acc / TRAIN_MEAS_BATCH,
+                                 sum_train_root_loss / TRAIN_MEAS_BATCH,
+                                 sum_train_root_acc / TRAIN_MEAS_BATCH))
 
+                    sum_train_loss = 0.0
+                    sum_train_root_loss = 0.0
+                    sum_train_acc = 0.0
+                    sum_train_root_acc = 0.0
+                    batch_time = time.time()
+
+                if current_step % FLAGS.evaluate_every == 0:
+                    dev_loss, dev_acc, dev_root_loss, dev_root_acc = \
+                        eval_dataset(x_dev, lambda ex: dev_sample(ex, writer=dev_summary_writer))
                     print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
-                          format(sum_loss, sum_acc, sum_root_loss, sum_root_acc))
+                          format(dev_loss, dev_acc, dev_root_acc, dev_root_acc))
+                    print("")
+
+                if current_step % FLAGS.test_evaluate_every == 0:
+                    test_loss, test_acc, test_root_loss, test_root_acc = \
+                        eval_dataset(x_test, lambda ex: dev_sample(ex))
+                    print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
+                          format(test_loss, test_acc, test_root_acc, test_root_acc))
                     print("")
 
                 if current_step % FLAGS.checkpoint_every == 0:
                     path = saver.save(sess, checkpoint_prefix, global_step=current_step)
                     print("Saved model checkpoint to {}\n".format(path))
 
-            print("Epoch #" + str(epoch) + " has finished")
+            print("Epoch #" + str(epoch + 1) + " has finished")

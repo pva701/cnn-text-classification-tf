@@ -113,7 +113,7 @@ class BinaryTreeSimple(object):
             with tf.name_scope("accuracy"):
                 correct_predictions = tf.equal(self.predictions, tf.argmax(self.labels, 1))
                 self.root_accuracy = tf.equal(self.predictions[-1],
-                                              tf.argmax(self.labels[-1]))
+                                              tf.argmax(self.labels[-1], axis=0))
                 self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
 
     def data_type(self):

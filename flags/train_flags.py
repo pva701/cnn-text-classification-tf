@@ -10,7 +10,7 @@ tf.flags.DEFINE_string("dataset_word2vec_path", "./data/stanford_sentiment_treeb
                        , "Path to word2vec for current dataset")
 tf.flags.DEFINE_string("word2vec_path", "./data/word2vec/GoogleNews-vectors-negative300.bin"
                        , "Path to word2vec")
-tf.flags.DEFINE_string("sst_path", "/home/pva701/github/cnn-text-classification-tf/data/stanford_sentiment_treebank",
+tf.flags.DEFINE_string("sst_path", "./data/stanford_sentiment_treebank",
                        "Path to SST")
 
 # Model Hyperparameters
@@ -20,8 +20,9 @@ tf.flags.DEFINE_float("l2_reg_lambda", 0.0000, "L2 regularization lambda (defaul
 
 # Training parameters
 tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 200)")
-tf.flags.DEFINE_integer("evaluate_every", 4000, "Evaluate model on dev set after this many steps (default: 100)")
-tf.flags.DEFINE_integer("checkpoint_every", 5000, "Save model after this many steps (default: 100)")
+tf.flags.DEFINE_integer("evaluate_every", 4000, "Evaluate model on dev set after this many steps")
+tf.flags.DEFINE_integer("test_evaluate_every", 8000, "Evaluate model on test set after this many steps")
+tf.flags.DEFINE_integer("checkpoint_every", 4000, "Save model after this many steps")
 tf.flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store (default: 5)")
 # Misc Parameters
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
