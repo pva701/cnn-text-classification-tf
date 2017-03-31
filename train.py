@@ -256,6 +256,7 @@ with tf.Graph().as_default():
         tree_nn = TreeBased(
             is_binary_task,
             vocab_size=len(vocab_processor.vocabulary_),
+            recursive_size=300,
             window_algo=cnn_window,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,

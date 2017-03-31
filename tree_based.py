@@ -6,6 +6,7 @@ class TreeBased(object):
     def init_binary_tree_simple(self
                                 , num_classes
                                 , vocab_size
+                                , recursive_size
                                 , window_vector_size
                                 , embedding_size=None
                                 , pretrained_embedding=None):
@@ -23,24 +24,31 @@ class TreeBased(object):
                                         initializer=tf.constant_initializer(pretrained_embedding, dtype=np.float32))
 
             with tf.name_scope("recursive"):
-                in_size = window_vector_size
-                out_size = window_vector_size
+                if not recursive_size:
+                    recursive_size = window_vector_size
+                else:
+                    W_t = tf.get_variable("W_t",
+                                          [window_vector_size, recursive_size],
+                                          initializer=tf.contrib.layers.xavier_initializer())
 
-                W1 = tf.get_variable("W1",
-                                     [in_size, out_size],
-                                     initializer=tf.contrib.layers.xavier_initializer())
-                W2 = tf.get_variable("W2",
-                                     [in_size, out_size],
-                                     initializer=tf.contrib.layers.xavier_initializer())
+                    biases_t = tf.get_variable("biases_t", [recursive_size],
+                                               initializer=tf.zeros_initializer())
 
-                biases = tf.get_variable("biases_rec", [out_size],
+                W1_rec = tf.get_variable("W1_rec",
+                                         [recursive_size, recursive_size],
+                                         initializer=tf.contrib.layers.xavier_initializer())
+                W2_rec = tf.get_variable("W2_rec",
+                                         [recursive_size, recursive_size],
+                                         initializer=tf.contrib.layers.xavier_initializer())
+
+                biases = tf.get_variable("biases_rec", [recursive_size],
                                          initializer=tf.zeros_initializer())
 
 
             # Final (unnormalized) scores and predictions
             with tf.name_scope("output"):
-                W = tf.get_variable("W",
-                                    shape=[out_size, num_classes],
+                W = tf.get_variable("W_out",
+                                    shape=[recursive_size, num_classes],
                                     initializer=tf.contrib.layers.xavier_initializer())
                 biases = tf.get_variable("biases_out", [num_classes], initializer=tf.zeros_initializer())
 
@@ -48,6 +56,7 @@ class TreeBased(object):
                  is_binary,
                  vocab_size,
                  window_algo,
+                 recursive_size=None,
                  embedding_size=None,
                  pretrained_embedding=None,
                  l2_reg_lambda=0.0):
@@ -57,7 +66,7 @@ class TreeBased(object):
         else:
             num_classes = 5
 
-        self.init_binary_tree_simple(num_classes, vocab_size,
+        self.init_binary_tree_simple(num_classes, vocab_size, recursive_size,
                                      window_algo.output_vector_size(),
                                      embedding_size, pretrained_embedding)
 
@@ -80,9 +89,17 @@ class TreeBased(object):
             # Window here
             windows_repr = window_algo.build_graph(expanded_vectors, self.dropout_keep_prob)
 
+            if recursive_size:
+                W_t = tf.get_variable("W_t")
+                biases_t = tf.get_variable("biases_t")
+
+                leaves_vectors = tf.nn.sigmoid(tf.matmul(windows_repr, W_t) + biases_t)
+            else:
+                leaves_vectors = windows_repr
+
             with tf.name_scope("recursive"):
-                W1 = tf.get_variable("W1")
-                W2 = tf.get_variable("W2")
+                W1 = tf.get_variable("W1_rec")
+                W2 = tf.get_variable("W2_rec")
                 biases_rec = tf.get_variable("biases_rec")
 
                 def apply_children(vectors, i):
@@ -95,7 +112,7 @@ class TreeBased(object):
 
                 hidden = tf.foldl(apply_children,
                                   tf.range(tf.constant(0), self.n_words - 1),
-                                  initializer=windows_repr)
+                                  initializer=leaves_vectors)
 
             # Add dropout
             with tf.name_scope("dropout"):
@@ -106,7 +123,7 @@ class TreeBased(object):
                 # Keeping track of l2 regularization loss (optional)
                 l2_loss = tf.constant(0.0)
 
-                W = tf.get_variable("W")
+                W = tf.get_variable("W_out")
                 biases_out = tf.get_variable("biases_out")
 
                 l2_loss += tf.nn.l2_loss(W)
