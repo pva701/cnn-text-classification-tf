@@ -8,7 +8,7 @@ import numpy as np
 from tensorflow.contrib import learn
 
 import data_helpers
-from tree_simple_cnn import BinaryTreeSimpleCNN
+from tree_cnn import TreeSimpleCNN
 from flags.train_flags import FLAGS
 import pytreebank
 
@@ -24,67 +24,82 @@ def eval_dataset(x_dataset, evaluator):
     sum_acc = 0.0
     sum_root_acc = 0.0
     examples = 0
+    examples_root = 0
+
     for ex in x_dataset:
         l, ac, rl, rac = evaluator(ex)
         sum_loss += l
         sum_acc += ac
-        sum_root_loss += rl
-        sum_root_acc += rac
+        if rl:
+            examples_root += 1
+            sum_root_loss += rl
+            sum_root_acc += rac
         examples += 1
+
     sum_loss /= examples
     sum_acc /= examples
-    sum_root_loss /= examples
-    sum_root_acc /= examples
+    sum_root_loss /= examples_root
+    sum_root_acc /= examples_root
     return sum_loss, sum_acc, sum_root_loss, sum_root_acc
 
+def train_sample(tree, tree_nn, vocab_dict, is_binary, summary=None):
+    if is_binary:
+        x, left, right, labels, binary_ids = \
+            tree.to_sample(vocab_dict, is_binary=True)
+        if binary_ids[-1] == 2 * len(x) - 2:
+            root_valid = True
+        else:
+            root_valid = False
+    else:
+        binary_ids = []
+        root_valid = True
+        x, left, right, labels = tree.to_sample(vocab_dict)
 
-def train_sample(tree, tree_nn, vocab_dict, summary=None):
-    x, left, right, labels = tree.to_sample(vocab_dict)
     feed_dict = {
         tree_nn.words: x,
         tree_nn.n_words: len(x),
         tree_nn.left: left,
         tree_nn.right: right,
         tree_nn.labels: labels,
+        tree_nn.binary_ids: binary_ids,
         tree_nn.dropout_keep_prob: FLAGS.dropout_keep_prob
     }
 
     if summary:
         _, step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
-            [train_op,
-             global_step,
-             summary[1],
-             tree_nn.loss,
-             tree_nn.accuracy,
-             tree_nn.root_loss,
-             tree_nn.root_accuracy],
+            [train_op, global_step, summary[1], tree_nn.loss, tree_nn.accuracy, tree_nn.root_loss, tree_nn.root_accuracy],
             feed_dict)
     else:
         _, step, loss, accuracy, root_loss, root_acc = sess.run(
-            [train_op,
-             global_step,
-             tree_nn.loss,
-             tree_nn.accuracy,
-             tree_nn.root_loss,
-             tree_nn.root_accuracy],
+            [train_op, global_step, tree_nn.loss, tree_nn.accuracy, tree_nn.root_loss, tree_nn.root_accuracy],
             feed_dict)
 
     if summary:
         summary[0].add_summary(summaries, step)
-    return loss, accuracy, root_loss, root_acc
 
+    if root_valid:
+        return loss, accuracy, root_loss, root_acc
+    return loss, accuracy, None, None
 
-def dev_sample(tree, tree_nn, vocab_dict, summary=None):
-    """
-    Evaluates model on a dev set
-    """
-    x, left, right, labels = tree.to_sample(vocab_dict)
+def dev_sample(tree, tree_nn, vocab_dict, is_binary, summary=None):
+    if is_binary:
+        x, left, right, labels, binary_ids = tree.to_sample(vocab_dict, is_binary=True)
+        if binary_ids[-1] == 2 * len(x) - 2:
+            root_valid = True
+        else:
+            root_valid = False
+    else:
+        binary_ids = []
+        root_valid = True
+        x, left, right, labels = tree.to_sample(vocab_dict)
+
     feed_dict = {
         tree_nn.words: x,
         tree_nn.n_words: len(x),
         tree_nn.left: left,
         tree_nn.right: right,
         tree_nn.labels: labels,
+        tree_nn.binary_ids: binary_ids,
         tree_nn.dropout_keep_prob: 1.0
     }
 
@@ -108,8 +123,10 @@ def dev_sample(tree, tree_nn, vocab_dict, summary=None):
 
     if summary:
         summary[0].add_summary(summaries, step)
-    return loss, accuracy, root_loss, root_acc
 
+    if root_valid:
+        return loss, accuracy, root_loss, root_acc
+    return loss, accuracy, None, None
 
 def init_summaries():
     # Keep track of gradient values and sparsity (optional)
@@ -154,13 +171,15 @@ checkpoint_prefix = os.path.join(checkpoint_dir, "model")
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
 
+is_binary_task = FLAGS.is_binary
+print("Binary classification task:", is_binary_task)
+
 # Load data
 print("Loading data...")
 dataset = pytreebank.load_sst(FLAGS.sst_path)
 x_train = [x.lowercase() for x in dataset["train"]]
 x_dev = [x.lowercase() for x in dataset["dev"]]
 x_test = [x.lowercase() for x in dataset["test"]]
-n = len(x_train)
 
 # Build vocabulary
 x_train_words = [x.to_words() for x in x_train]
@@ -194,17 +213,28 @@ if FLAGS.embedding_dim is None:  # use pretrained
     for word, idx in vocab_dict.items():
         list_vecs[idx] = word2vec[word]
     word2vec_matrix = np.array(list_vecs)
-
 print("Vocabulary Size: {:d}".format(vocab_size))
 print("Train/Dev/Test split: {:d}/{:d}/{:d}".
       format(len(x_train), len(x_dev), len(x_test)))
 
-print("To sample")
-for x in x_train:
-    x.to_sample(vocab_dict)
+def to_sample_list(x_data):
+    x_ret = []
+    for x in x_data:
+        x.to_sample(vocab_dict, is_binary_task)
+        if is_binary_task:
+            if len(x.sample_bin[4]) != 0:
+                x_ret.append(x)
+        else:
+            x_ret.append(x)
+    return x_ret
 
-for x in x_dev:
-    x.to_sample(vocab_dict)
+
+print("To sample")
+x_train = to_sample_list(x_train)
+x_dev = to_sample_list(x_dev)
+x_test = to_sample_list(x_test)
+
+n = len(x_train)
 print("To sample finished")
 
 # Training
@@ -215,8 +245,8 @@ with tf.Graph().as_default():
         log_device_placement=FLAGS.log_device_placement)
     sess = tf.Session(config=session_conf)
     with sess.as_default():
-        tree_nn = BinaryTreeSimpleCNN(
-            num_classes=5,
+        tree_nn = TreeSimpleCNN(
+            is_binary_task,
             vocab_size=len(vocab_processor.vocabulary_),
             filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
             num_filters=FLAGS.num_filters,
@@ -243,16 +273,20 @@ with tf.Graph().as_default():
         sum_train_root_loss = 0.0
         sum_train_acc = 0.0
         sum_train_root_acc = 0.0
+        root_cnt = 0
         batch_time = time.time()
 
         for epoch in range(FLAGS.num_epochs):
             for sample_id in np.random.permutation(n):
                 lt, at, rlt, rat = train_sample(x_train[sample_id], tree_nn, vocab_dict,
+                                                is_binary_task,
                                                 summary=(train_summary_writer, train_summary_op))
                 sum_train_loss += lt
                 sum_train_acc += at
-                sum_train_root_loss += rlt
-                sum_train_root_acc += rat
+                if rlt:
+                    root_cnt += 1
+                    sum_train_root_loss += rlt
+                    sum_train_root_acc += rat
 
                 current_step = tf.train.global_step(sess, global_step)
 
@@ -262,9 +296,9 @@ with tf.Graph().as_default():
                                  time.time() - batch_time,
                                  sum_train_loss / TRAIN_MEAS_BATCH,
                                  sum_train_acc / TRAIN_MEAS_BATCH,
-                                 sum_train_root_loss / TRAIN_MEAS_BATCH,
-                                 sum_train_root_acc / TRAIN_MEAS_BATCH))
-
+                                 sum_train_root_loss / root_cnt,
+                                 sum_train_root_acc / root_cnt))
+                    root_cnt = 0
                     sum_train_loss = 0.0
                     sum_train_root_loss = 0.0
                     sum_train_acc = 0.0
@@ -273,7 +307,7 @@ with tf.Graph().as_default():
 
                 if current_step % FLAGS.evaluate_every == 0:
                     dev_loss, dev_acc, dev_root_loss, dev_root_acc = \
-                        eval_dataset(x_dev, lambda ex: dev_sample(ex, tree_nn, vocab_dict,
+                        eval_dataset(x_dev, lambda ex: dev_sample(ex, tree_nn, vocab_dict, is_binary_task,
                                                                   summary=(dev_summary_writer, dev_summary_op)))
                     print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(dev_loss, dev_acc, dev_root_acc, dev_root_acc))
@@ -281,7 +315,7 @@ with tf.Graph().as_default():
 
                 if current_step % FLAGS.test_evaluate_every == 0:
                     test_loss, test_acc, test_root_loss, test_root_acc = \
-                        eval_dataset(x_test, lambda ex: dev_sample(ex, tree_nn, vocab_dict))
+                        eval_dataset(x_test, lambda ex: dev_sample(ex, tree_nn, vocab_dict, is_binary_task))
                     print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(test_loss, test_acc, test_root_acc, test_root_acc))
                     print("")

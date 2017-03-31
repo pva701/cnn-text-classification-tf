@@ -12,9 +12,12 @@ import pytreebank
 
 # Eval Parameters
 tf.flags.DEFINE_string("sst_path", "./data/stanford_sentiment_treebank", "SST dataset path")
-tf.flags.DEFINE_string("checkpoint_dir", "./runs/1490879569/checkpoints/",
+tf.flags.DEFINE_string("checkpoint_dir", "./runs/1490975397/checkpoints/",
                        "Checkpoint directory from training run")
 tf.flags.DEFINE_boolean("eval_train", False, "Evaluate on all training data")
+
+tf.flags.DEFINE_boolean("is_binary", False, "Binary classification or fine-grained")
+
 
 # Misc Parameters
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
@@ -28,6 +31,7 @@ for attr, value in sorted(FLAGS.__flags.items()):
     print("{}={}".format(attr.upper(), value))
 print("")
 
+is_binary_task = FLAGS.is_binary
 
 print("Loading data..")
 dataset = pytreebank.load_sst(FLAGS.sst_path)
@@ -61,6 +65,7 @@ with graph.as_default():
         left = graph.get_operation_by_name("left").outputs[0]
         right = graph.get_operation_by_name("right").outputs[0]
         labels = graph.get_operation_by_name("labels").outputs[0]
+        binary_ids = graph.get_operation_by_name("binary_ids").outputs[0]
         dropout_keep_prob = graph.get_operation_by_name("dropout_keep_prob").outputs[0]
 
         # Tensors we want to evaluate
@@ -68,22 +73,43 @@ with graph.as_default():
         accuracy = graph.get_operation_by_name("internal-state_1/accuracy/accuracy").outputs[0]
         root_accuracy = graph.get_operation_by_name("internal-state_1/accuracy/root_accuracy").outputs[0]
 
-        test_examples = len(x_test)
+        test_examples = 0
+        test_root_examples = 0
         sum_acc = 0.0
         sum_root_acc = 0.0
         for ex in x_test:
-            x, x_left, x_right, x_labels = ex.to_sample(vocab_dict)
+            if is_binary_task:
+                x, x_left, x_right, x_labels, x_binary_ids = ex.to_sample(vocab_dict, is_binary_task)
+                if binary_ids[-1] == 2 * len(x) - 2:
+                    root_valid = True
+                else:
+                    root_valid = False
+            else:
+                x_binary_ids = []
+                root_valid = True
+                x, x_left, x_right, x_labels = ex.to_sample(vocab_dict, is_binary_task)
+
+
             feed_dict = {
                 words: x,
                 n_words: len(x),
                 left: x_left,
                 right: x_right,
                 labels: x_labels,
+                binary_ids: x_binary_ids,
                 dropout_keep_prob: 1.0
             }
             acc, root_acc = sess.run([accuracy, root_accuracy], feed_dict)
             sum_acc += acc
-            sum_root_acc += root_acc
+            test_examples += 1
+
+            if test_examples % 100 == 0:
+                print("{} Done".format(test_examples))
+
+            if root_valid:
+                sum_root_acc += root_acc
+                test_root_examples += 1
+
         sum_acc /= test_examples
-        sum_root_acc /= test_examples
+        sum_root_acc /= test_root_examples
         print("Accuracy: {:g}, Root accuracy: {:g}".format(sum_acc, sum_root_acc))

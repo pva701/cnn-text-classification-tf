@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-class BinaryTreeSimpleCNN(object):
+class TreeSimpleCNN(object):
     def init_binary_tree_simple(self
                                 , num_classes
                                 , vocab_size
@@ -32,7 +32,6 @@ class BinaryTreeSimpleCNN(object):
                     b = tf.get_variable("b_conv_{}".format(filter_size), [num_filters],
                                         initializer=tf.constant_initializer(0.1))
 
-
             with tf.name_scope("recursive"):
                 num_filters_total = num_filters * len(filter_sizes)
                 in_size = num_filters_total
@@ -57,13 +56,18 @@ class BinaryTreeSimpleCNN(object):
                 biases = tf.get_variable("biases_out", [num_classes], initializer=tf.zeros_initializer())
 
     def __init__(self,
-                 num_classes,
+                 is_binary,
                  vocab_size,
                  filter_sizes,
                  num_filters,
                  embedding_size=None,
                  pretrained_embedding=None,
                  l2_reg_lambda=0.0):
+
+        if is_binary:
+            num_classes = 2
+        else:
+            num_classes = 5
 
         self.init_binary_tree_simple(num_classes, vocab_size,
                                      filter_sizes, num_filters,
@@ -77,6 +81,7 @@ class BinaryTreeSimpleCNN(object):
         self.left = tf.placeholder(tf.int32, [None], "left")  # n - 1
         self.right = tf.placeholder(tf.int32, [None], "right")  # n - 1
         self.labels = tf.placeholder(tf.int32, [None, num_classes], "labels")  # 2n-1x5
+        self.binary_ids = tf.placeholder(tf.int32, [None], "binary_ids")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
         with tf.variable_scope("internal-state") as scope:
@@ -85,7 +90,7 @@ class BinaryTreeSimpleCNN(object):
                 embedding_matrix = tf.get_variable("embedding")
                 embedded_vectors = tf.nn.embedding_lookup(embedding_matrix, self.words)
                 expanded_vectors = tf.expand_dims(tf.expand_dims(embedded_vectors, 0), -1)
-                #print(expanded_vectors.get_shape())
+                # print(expanded_vectors.get_shape())
 
             conv_outputs = []
             for i, filter_size in enumerate(filter_sizes):
@@ -99,16 +104,16 @@ class BinaryTreeSimpleCNN(object):
                         strides=[1, 1, 1, 1],
                         padding="VALID",
                         name="conv")
-                    #print("CONV: ", conv.get_shape())
+                    # print("CONV: ", conv.get_shape())
                     # Apply nonlinearity
                     h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
-                    #print("H: ", h.get_shape())
+                    # print("H: ", h.get_shape())
                     conv_outputs.append(h)
 
             num_filters_total = num_filters * len(filter_sizes)
             conc_conv = tf.concat(conv_outputs, 3)
-            flat_conv= tf.reshape(conc_conv, [-1, num_filters_total])
-            #print(flat_conv.get_shape())
+            flat_conv = tf.reshape(conc_conv, [-1, num_filters_total])
+            # print(flat_conv.get_shape())
 
             with tf.name_scope("recursive"):
                 W1 = tf.get_variable("W1")
@@ -125,7 +130,7 @@ class BinaryTreeSimpleCNN(object):
 
                 hidden = tf.foldl(apply_children,
                                   tf.range(tf.constant(0), self.n_words - 1),
-                                      initializer=flat_conv)
+                                  initializer=flat_conv)
 
             # Add dropout
             with tf.name_scope("dropout"):
@@ -145,11 +150,18 @@ class BinaryTreeSimpleCNN(object):
                 self.scores = tf.nn.xw_plus_b(h_drop, W, biases, name="scores")
                 self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
-                losses = \
-                    tf.nn.softmax_cross_entropy_with_logits(
-                        labels=self.labels,
-                        logits=self.scores,
-                        name="losses")
+                if is_binary:
+                    losses = \
+                        tf.nn.softmax_cross_entropy_with_logits(
+                            labels=tf.gather(self.labels, self.binary_ids),
+                            logits=tf.gather(self.scores, self.binary_ids),
+                            name="losses")
+                else:
+                    losses = \
+                        tf.nn.softmax_cross_entropy_with_logits(
+                            labels=self.labels,
+                            logits=self.scores,
+                            name="losses")
                 self.root_loss = \
                     tf.nn.softmax_cross_entropy_with_logits(
                         labels=self.labels[-1],
@@ -160,7 +172,14 @@ class BinaryTreeSimpleCNN(object):
 
             # Accuracy
             with tf.name_scope("accuracy"):
-                correct_predictions = tf.equal(self.predictions, tf.argmax(self.labels, 1))
+                if is_binary:
+                    correct_predictions = \
+                        tf.equal(
+                            tf.gather(self.predictions, self.binary_ids),
+                            tf.argmax(tf.gather(self.labels, self.binary_ids), 1))
+                else:
+                    correct_predictions = tf.equal(self.predictions, tf.argmax(self.labels, 1))
+
                 self.root_accuracy = tf.equal(self.predictions[-1],
                                               tf.argmax(self.labels[-1], axis=0),
                                               name="root_accuracy")

@@ -1,7 +1,6 @@
 """
 Make trees visualizable in an IPython notebook
 """
-import json
 
 try:
     from PIL import ImageFont
@@ -36,6 +35,7 @@ class LabeledTree(object):
         self.udepth = udepth
         self.text_list = None
         self.sample = None
+        self.sample_bin = None
 
     def uproot(tree):
         """
@@ -128,15 +128,18 @@ class LabeledTree(object):
         words = self.to_words()
         return " ".join(words)
 
-    def to_sample(self, vocab):
-        if self.sample is not None:
+    def to_sample(self, vocab, is_binary=False):
+        if not is_binary and self.sample:
             return self.sample
+        if is_binary and self.sample_bin:
+            return self.sample_bin
 
         n = len(self.to_words())
         words_id = [None]*n
         left = []
         right = []
         labels = [None] * (2 * n - 1)
+        binary_ids = []
         self.list_num = 0
         self.vert_num = n
 
@@ -147,8 +150,17 @@ class LabeledTree(object):
                 else:
                     words_id[self.list_num] = 0
 
-                l = [0]*5
-                l[node.label] = 1
+                if is_binary:
+                    l = [0, 0]
+                    if node.label < 2:
+                        l[0] = 1
+                    elif node.label > 2:
+                        l[1] = 1
+                    if node.label != 2:
+                       binary_ids.append(self.list_num)
+                else:
+                    l = [0]*5
+                    l[node.label] = 1
                 labels[self.list_num] = l
 
                 self.list_num += 1
@@ -160,81 +172,33 @@ class LabeledTree(object):
                 left.append(l_n)
                 right.append(r_n)
 
-                l = [0]*5
-                l[node.label] = 1
+                if is_binary:
+                    l = [0, 0]
+                    if node.label < 2:
+                        l[0] = 1
+                    elif node.label > 2:
+                        l[1] = 1
+                    if node.label != 2:
+                       binary_ids.append(self.vert_num)
+                else:
+                    l = [0]*5
+                    l[node.label] = 1
                 labels[self.vert_num] = l
 
                 self.vert_num += 1
                 return self.vert_num - 1
+
         rec(self)
         assert self.list_num == n
         assert self.vert_num == 2 * n - 1
         assert len(left) == len(right) and len(left) + 1 == len(words_id)
-        self.sample = (words_id, left, right, labels)
-        return self.sample
 
-
-    def to_dict(self, index=0):
-        """
-        Dict format for use in Javascript / Jason Chuang's display technology.
-        """
-        index += 1
-        rep = {}
-        rep["index"] = index
-        rep["leaf"] = len(self.children) == 0
-        rep["depth"] = self.udepth
-        rep["scoreDistr"] = [0.0] * len(LabeledTree.SCORE_MAPPING)
-        # dirac distribution at correct label
-        if self.label is not None:
-            rep["scoreDistr"][self.label] = 1.0
-            mapping = LabeledTree.SCORE_MAPPING[:]
-            rep["rating"] = mapping[self.label] - min(mapping)
-        # if you are using this method for printing predictions
-        # from a model, the the dot product with the model's output
-        # distribution should be taken with this list:
-        rep["numChildren"] = len(self.children)
-        text = self.text if self.text != None else ""
-        seen_tokens = 0
-        witnessed_pixels = 0
-        for i, child in enumerate(self.children):
-            if i > 0:
-                text += " "
-            child_key = "child%d" % (i)
-            (rep[child_key], index) = child.to_dict(index)
-            text += rep[child_key]["text"]
-            seen_tokens += rep[child_key]["tokens"]
-            witnessed_pixels += rep[child_key]["pixels"]
-
-        rep["text"] = text
-        rep["tokens"] = 1 if (self.text != None and len(self.text) > 0) else seen_tokens
-        rep["pixels"] = witnessed_pixels + 3 if len(self.children) > 0 else text_size(self.text)
-        return (rep, index)
-
-    def to_json(self):
-        rep, _ = self.to_dict()
-        return json.dumps(rep)
-
-    def display(self):
-        from IPython.display import Javascript, display
-
-        display(Javascript("createTrees([" + self.to_json() + "])"))
-        display(Javascript("updateTrees()"))
-
-    def to_lines(self):
-        if len(self.children) > 0:
-            left_lines, right_lines = self.children[0].to_lines(), self.children[1].to_lines()
-            self_line = [left_lines[0] + " " + right_lines[0]]
-            return self_line + left_lines + right_lines
+        if is_binary:
+            self.sample_bin = (words_id, left, right, labels, binary_ids)
+            return self.sample_bin
         else:
-            return [self.text]
-
-    def to_labeled_lines(self):
-        if len(self.children) > 0:
-            left_lines, right_lines = self.children[0].to_labeled_lines(), self.children[1].to_labeled_lines()
-            self_line = [(self.label, left_lines[0][1] + " " + right_lines[0][1])]
-            return self_line + left_lines + right_lines
-        else:
-            return [(self.label, self.text)]
+            self.sample = (words_id, left, right, labels)
+            return self.sample
 
     def __str__(self):
         """
