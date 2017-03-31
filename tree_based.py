@@ -2,12 +2,11 @@ import tensorflow as tf
 import numpy as np
 
 
-class TreeSimpleCNN(object):
+class TreeBased(object):
     def init_binary_tree_simple(self
                                 , num_classes
                                 , vocab_size
-                                , filter_sizes
-                                , num_filters
+                                , window_vector_size
                                 , embedding_size=None
                                 , pretrained_embedding=None):
         with tf.variable_scope("internal-state"):
@@ -23,25 +22,15 @@ class TreeSimpleCNN(object):
                                         shape=[vocab_size, embedding_size],
                                         initializer=tf.constant_initializer(pretrained_embedding, dtype=np.float32))
 
-            for i, filter_size in enumerate(filter_sizes):
-                with tf.name_scope("conv-maxpool-{}".format(filter_size)):
-                    # Convolution Layer
-                    filter_shape = [filter_size, embedding_size, 1, num_filters]
-                    W = tf.get_variable("W_conv_{}".format(filter_size), filter_shape,
-                                        initializer=tf.truncated_normal_initializer(stddev=0.1))
-                    b = tf.get_variable("b_conv_{}".format(filter_size), [num_filters],
-                                        initializer=tf.constant_initializer(0.1))
-
             with tf.name_scope("recursive"):
-                num_filters_total = num_filters * len(filter_sizes)
-                in_size = num_filters_total
-                out_size = num_filters_total
+                in_size = window_vector_size
+                out_size = window_vector_size
 
                 W1 = tf.get_variable("W1",
-                                     [num_filters_total, out_size],
+                                     [in_size, out_size],
                                      initializer=tf.contrib.layers.xavier_initializer())
                 W2 = tf.get_variable("W2",
-                                     [num_filters_total, out_size],
+                                     [in_size, out_size],
                                      initializer=tf.contrib.layers.xavier_initializer())
 
                 biases = tf.get_variable("biases_rec", [out_size],
@@ -58,8 +47,7 @@ class TreeSimpleCNN(object):
     def __init__(self,
                  is_binary,
                  vocab_size,
-                 filter_sizes,
-                 num_filters,
+                 window_algo,
                  embedding_size=None,
                  pretrained_embedding=None,
                  l2_reg_lambda=0.0):
@@ -70,10 +58,8 @@ class TreeSimpleCNN(object):
             num_classes = 5
 
         self.init_binary_tree_simple(num_classes, vocab_size,
-                                     filter_sizes, num_filters,
+                                     window_algo.output_vector_size(),
                                      embedding_size, pretrained_embedding)
-        if not embedding_size:
-            embedding_size = pretrained_embedding.shape[1]
 
         self.words = tf.placeholder(tf.int32, [None], "words")  # n
         self.n_words = tf.placeholder(tf.int32, [], "n_words")  # n
@@ -90,33 +76,9 @@ class TreeSimpleCNN(object):
                 embedding_matrix = tf.get_variable("embedding")
                 embedded_vectors = tf.nn.embedding_lookup(embedding_matrix, self.words)
                 expanded_vectors = tf.expand_dims(tf.expand_dims(embedded_vectors, 0), -1)
-                # print(expanded_vectors.get_shape())
 
-            conv_outputs = []
-            for i, filter_size in enumerate(filter_sizes):
-                with tf.name_scope("conv-maxpool-{}".format(filter_size)):
-                    W = tf.get_variable("W_conv_{}".format(filter_size))
-                    b = tf.get_variable("b_conv_{}".format(filter_size))
-                    padding = tf.zeros([1, filter_size - 1, embedding_size, 1])
-                    conv = tf.nn.conv2d(
-                        tf.concat([expanded_vectors, padding], 1),
-                        W,
-                        strides=[1, 1, 1, 1],
-                        padding="VALID",
-                        name="conv")
-                    # print("CONV: ", conv.get_shape())
-                    # Apply nonlinearity
-                    h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
-                    # print("H: ", h.get_shape())
-                    conv_outputs.append(h)
-
-            num_filters_total = num_filters * len(filter_sizes)
-            conc_conv = tf.concat(conv_outputs, 3)
-            flat_conv_unreg = tf.reshape(conc_conv, [-1, num_filters_total])
-
-            # Add dropout
-            with tf.name_scope("dropout"):
-                flat_conv = tf.nn.dropout(flat_conv_unreg, self.dropout_keep_prob)
+            # Window here
+            windows_repr = window_algo.build_graph(expanded_vectors, self.dropout_keep_prob)
 
             with tf.name_scope("recursive"):
                 W1 = tf.get_variable("W1")
@@ -133,7 +95,7 @@ class TreeSimpleCNN(object):
 
                 hidden = tf.foldl(apply_children,
                                   tf.range(tf.constant(0), self.n_words - 1),
-                                  initializer=flat_conv)
+                                  initializer=windows_repr)
 
             # Add dropout
             with tf.name_scope("dropout"):

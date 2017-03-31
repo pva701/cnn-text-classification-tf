@@ -8,9 +8,10 @@ import numpy as np
 from tensorflow.contrib import learn
 
 import data_helpers
-from tree_cnn import TreeSimpleCNN
+from tree_based import TreeBased
 from flags.train_flags import FLAGS
 import pytreebank
+import cnn_window
 
 print("\nParameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
@@ -245,11 +246,17 @@ with tf.Graph().as_default():
         log_device_placement=FLAGS.log_device_placement)
     sess = tf.Session(config=session_conf)
     with sess.as_default():
-        tree_nn = TreeSimpleCNN(
-            is_binary_task,
-            vocab_size=len(vocab_processor.vocabulary_),
+        real_embedding_size = FLAGS.embedding_dim if FLAGS.embedding_dim else word2vec_matrix.shape[1]
+
+        cnn_window = cnn_window.CnnWindow(
             filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
             num_filters=FLAGS.num_filters,
+            embedding_size=real_embedding_size)
+
+        tree_nn = TreeBased(
+            is_binary_task,
+            vocab_size=len(vocab_processor.vocabulary_),
+            window_algo=cnn_window,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
             l2_reg_lambda=FLAGS.l2_reg_lambda)
@@ -257,7 +264,8 @@ with tf.Graph().as_default():
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
-        optimizer = tf.train.AdagradOptimizer(0.001)
+        optimizer = tf.train.AdamOptimizer(0.001)
+        #optimizer = tf.train.AdagradOptimizer(0.05)
         #AdaGrad
         #AdaDelta
         #reg_lam=0.0001
