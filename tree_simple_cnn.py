@@ -2,10 +2,12 @@ import tensorflow as tf
 import numpy as np
 
 
-class BinaryTreeSimple(object):
+class BinaryTreeSimpleCNN(object):
     def init_binary_tree_simple(self
                                 , num_classes
                                 , vocab_size
+                                , filter_sizes
+                                , num_filters
                                 , embedding_size=None
                                 , pretrained_embedding=None):
         with tf.variable_scope("internal-state"):
@@ -21,33 +23,53 @@ class BinaryTreeSimple(object):
                                         shape=[vocab_size, embedding_size],
                                         initializer=tf.constant_initializer(pretrained_embedding, dtype=np.float32))
 
+            for i, filter_size in enumerate(filter_sizes):
+                with tf.name_scope("conv-maxpool-{}".format(filter_size)):
+                    # Convolution Layer
+                    filter_shape = [filter_size, embedding_size, 1, num_filters]
+                    W = tf.get_variable("W_conv_{}".format(filter_size), filter_shape,
+                                        initializer=tf.truncated_normal_initializer(stddev=0.1))
+                    b = tf.get_variable("b_conv_{}".format(filter_size), [num_filters],
+                                        initializer=tf.constant_initializer(0.1))
+
+
             with tf.name_scope("recursive"):
+                num_filters_total = num_filters * len(filter_sizes)
+                in_size = num_filters_total
+                out_size = num_filters_total
+
                 W1 = tf.get_variable("W1",
-                                     [embedding_size, embedding_size],
+                                     [num_filters_total, out_size],
                                      initializer=tf.contrib.layers.xavier_initializer())
                 W2 = tf.get_variable("W2",
-                                     [embedding_size, embedding_size],
+                                     [num_filters_total, out_size],
                                      initializer=tf.contrib.layers.xavier_initializer())
 
-                biases = tf.get_variable("biases_rec", [embedding_size],
+                biases = tf.get_variable("biases_rec", [out_size],
                                          initializer=tf.zeros_initializer())
 
 
             # Final (unnormalized) scores and predictions
             with tf.name_scope("output"):
                 W = tf.get_variable("W",
-                                    shape=[embedding_size, num_classes],
+                                    shape=[out_size, num_classes],
                                     initializer=tf.contrib.layers.xavier_initializer())
                 biases = tf.get_variable("biases_out", [num_classes], initializer=tf.zeros_initializer())
 
     def __init__(self,
                  num_classes,
                  vocab_size,
+                 filter_sizes,
+                 num_filters,
                  embedding_size=None,
                  pretrained_embedding=None,
                  l2_reg_lambda=0.0):
-        self.init_binary_tree_simple(num_classes, vocab_size, embedding_size, pretrained_embedding)
-        hidden_size = embedding_size
+
+        self.init_binary_tree_simple(num_classes, vocab_size,
+                                     filter_sizes, num_filters,
+                                     embedding_size, pretrained_embedding)
+        if not embedding_size:
+            embedding_size = pretrained_embedding.shape[1]
 
         self.words = tf.placeholder(tf.int32, [None], "words")  # n
         self.n_words = tf.placeholder(tf.int32, [], "n_words")  # n
@@ -62,6 +84,31 @@ class BinaryTreeSimple(object):
             with tf.name_scope("embedding"):
                 embedding_matrix = tf.get_variable("embedding")
                 embedded_vectors = tf.nn.embedding_lookup(embedding_matrix, self.words)
+                expanded_vectors = tf.expand_dims(tf.expand_dims(embedded_vectors, 0), -1)
+                #print(expanded_vectors.get_shape())
+
+            conv_outputs = []
+            for i, filter_size in enumerate(filter_sizes):
+                with tf.name_scope("conv-maxpool-{}".format(filter_size)):
+                    W = tf.get_variable("W_conv_{}".format(filter_size))
+                    b = tf.get_variable("b_conv_{}".format(filter_size))
+                    padding = tf.zeros([1, filter_size - 1, embedding_size, 1])
+                    conv = tf.nn.conv2d(
+                        tf.concat([expanded_vectors, padding], 1),
+                        W,
+                        strides=[1, 1, 1, 1],
+                        padding="VALID",
+                        name="conv")
+                    #print("CONV: ", conv.get_shape())
+                    # Apply nonlinearity
+                    h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
+                    #print("H: ", h.get_shape())
+                    conv_outputs.append(h)
+
+            num_filters_total = num_filters * len(filter_sizes)
+            conc_conv = tf.concat(conv_outputs, 3)
+            flat_conv= tf.reshape(conc_conv, [-1, num_filters_total])
+            #print(flat_conv.get_shape())
 
             with tf.name_scope("recursive"):
                 W1 = tf.get_variable("W1")
@@ -78,7 +125,7 @@ class BinaryTreeSimple(object):
 
                 hidden = tf.foldl(apply_children,
                                   tf.range(tf.constant(0), self.n_words - 1),
-                                      initializer=embedded_vectors)
+                                      initializer=flat_conv)
 
             # Add dropout
             with tf.name_scope("dropout"):

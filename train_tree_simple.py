@@ -8,7 +8,7 @@ import numpy as np
 from tensorflow.contrib import learn
 
 import data_helpers
-from tree_simple import BinaryTreeSimple
+from tree_simple_cnn import BinaryTreeSimpleCNN
 from flags.train_flags import FLAGS
 import pytreebank
 
@@ -215,9 +215,11 @@ with tf.Graph().as_default():
         log_device_placement=FLAGS.log_device_placement)
     sess = tf.Session(config=session_conf)
     with sess.as_default():
-        tree_nn = BinaryTreeSimple(
+        tree_nn = BinaryTreeSimpleCNN(
             num_classes=5,
             vocab_size=len(vocab_processor.vocabulary_),
+            filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
+            num_filters=FLAGS.num_filters,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
             l2_reg_lambda=FLAGS.l2_reg_lambda)
