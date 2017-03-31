@@ -112,20 +112,23 @@ class TreeSimpleCNN(object):
 
             num_filters_total = num_filters * len(filter_sizes)
             conc_conv = tf.concat(conv_outputs, 3)
-            flat_conv = tf.reshape(conc_conv, [-1, num_filters_total])
-            # print(flat_conv.get_shape())
+            flat_conv_unreg = tf.reshape(conc_conv, [-1, num_filters_total])
+
+            # Add dropout
+            with tf.name_scope("dropout"):
+                flat_conv = tf.nn.dropout(flat_conv_unreg, self.dropout_keep_prob)
 
             with tf.name_scope("recursive"):
                 W1 = tf.get_variable("W1")
                 W2 = tf.get_variable("W2")
-                biases = tf.get_variable("biases_rec")
+                biases_rec = tf.get_variable("biases_rec")
 
                 def apply_children(vectors, i):
                     lc = vectors[self.left[i]]
                     rc = vectors[self.right[i]]
                     vector = tf.nn.sigmoid(tf.matmul(tf.expand_dims(lc, 0), W1) +
                                            tf.matmul(tf.expand_dims(rc, 0), W2) +
-                                           biases)
+                                           biases_rec)
                     return tf.concat([vectors, vector], 0)
 
                 hidden = tf.foldl(apply_children,
@@ -142,12 +145,15 @@ class TreeSimpleCNN(object):
                 l2_loss = tf.constant(0.0)
 
                 W = tf.get_variable("W")
-                biases = tf.get_variable("biases_out")
+                biases_out = tf.get_variable("biases_out")
 
                 l2_loss += tf.nn.l2_loss(W)
-                l2_loss += tf.nn.l2_loss(biases)
+                l2_loss += tf.nn.l2_loss(biases_out)
+                l2_loss += tf.nn.l2_loss(W1)
+                l2_loss += tf.nn.l2_loss(W2)
+                l2_loss += tf.nn.l2_loss(biases_rec)
 
-                self.scores = tf.nn.xw_plus_b(h_drop, W, biases, name="scores")
+                self.scores = tf.nn.xw_plus_b(h_drop, W, biases_out, name="scores")
                 self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
                 if is_binary:
@@ -162,12 +168,12 @@ class TreeSimpleCNN(object):
                             labels=self.labels,
                             logits=self.scores,
                             name="losses")
+
                 self.root_loss = \
                     tf.nn.softmax_cross_entropy_with_logits(
                         labels=self.labels[-1],
                         logits=self.scores[-1],
                         name="root_loss")
-
                 self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
 
             # Accuracy
@@ -178,13 +184,10 @@ class TreeSimpleCNN(object):
                             tf.gather(self.predictions, self.binary_ids),
                             tf.argmax(tf.gather(self.labels, self.binary_ids), 1))
                 else:
-                    correct_predictions = tf.equal(self.predictions, tf.argmax(self.labels, 1))
+                    correct_predictions = \
+                        tf.equal(self.predictions, tf.argmax(self.labels, 1))
 
                 self.root_accuracy = tf.equal(self.predictions[-1],
                                               tf.argmax(self.labels[-1], axis=0),
                                               name="root_accuracy")
                 self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
-
-    def data_type(self):
-        return tf.float32
-        # return tf.float16 if FLAGS.use_fp16 else tf.float32

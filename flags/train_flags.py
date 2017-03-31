@@ -30,7 +30,7 @@ tf.flags.DEFINE_boolean("is_binary", False, "Binary classification or fine-grain
 tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 200)")
 tf.flags.DEFINE_integer("evaluate_every", 4000, "Evaluate model on dev set after this many steps")
 tf.flags.DEFINE_integer("test_evaluate_every", 8000, "Evaluate model on test set after this many steps")
-tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps")
+tf.flags.DEFINE_integer("checkpoint_every", 4000, "Save model after this many steps")
 tf.flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store (default: 5)")
 
 # Misc Parameters
