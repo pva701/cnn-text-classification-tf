@@ -10,6 +10,7 @@ from tree_based import TreeBased
 from flags.train_flags import FLAGS
 import pytreebank
 import cnn_window
+import lstm_window
 from train_helpers import *
 
 print("\nParameters:")
@@ -111,19 +112,22 @@ with tf.Graph().as_default():
     with sess.as_default():
         real_embedding_size = FLAGS.embedding_dim if FLAGS.embedding_dim else word2vec_matrix.shape[1]
 
-        window_algo = cnn_window.CnnWindow(
-            filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
-            num_filters=FLAGS.num_filters,
-            embedding_size=real_embedding_size)
-
-        # window_algo = lstm_window.LstmWindow(
-        #     hidden_size=200,
-        #     embedded_size=real_embedding_size)
+        if FLAGS.window_algo == "CNN":
+            window_algo = cnn_window.CnnWindow(
+                filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
+                num_filters=FLAGS.num_filters,
+                embedding_size=real_embedding_size)
+        elif FLAGS.window_algo == "LSTM":
+            window_algo = lstm_window.LstmWindow(
+                hidden_size=FLAGS.lstm_hidden,
+                embedded_size=real_embedding_size)
+        else:
+            raise Exception('Unknown window algo')
 
         tree_nn = TreeBased(
             is_binary_task,
             vocab_size=len(vocab_processor.vocabulary_),
-            recursive_size=300,
+            recursive_size=FLAGS.recursive_size,
             window_algo=window_algo,
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             embedding_size=FLAGS.embedding_dim,
@@ -133,8 +137,13 @@ with tf.Graph().as_default():
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
-        optimizer = tf.train.AdamOptimizer(0.001)
-        #optimizer = tf.train.AdagradOptimizer(0.05)
+
+        if FLAGS.optimizer == "Adagrad":
+            optimizer = tf.train.AdagradOptimizer(0.05)
+        elif FLAGS.optimizer == "Adam":
+            optimizer = tf.train.AdamOptimizer(0.001)
+        else:
+            raise Exception('Unknown optimizer')
         #AdaGrad
         #AdaDelta
         #reg_lam=0.0001
