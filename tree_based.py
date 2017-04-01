@@ -59,6 +59,7 @@ class TreeBased(object):
                  is_binary,
                  vocab_size,
                  window_algo,
+                 exclude_leaves_loss,
                  recursive_size=None,
                  embedding_size=None,
                  pretrained_embedding=None,
@@ -111,13 +112,15 @@ class TreeBased(object):
                                            biases_rec)
                     return tf.concat([vectors, vector], 0)
 
-                hidden = tf.foldl(apply_children,
+                out_repr_unstripped = tf.foldl(apply_children,
                                   tf.range(tf.constant(0), self.n_words - 1),
                                   initializer=leaves_vectors)
 
+                out_repr = out_repr_unstripped if not exclude_leaves_loss else out_repr_unstripped[self.n_words:]
+
             # Add dropout
             with tf.name_scope("dropout"):
-                h_drop = tf.nn.dropout(hidden, self.dropout_keep_prob)
+                out_repr_drop = tf.nn.dropout(out_repr, self.dropout_keep_prob)
 
             # Calculate Mean cross-entropy loss
             with tf.name_scope("loss"):
@@ -133,7 +136,7 @@ class TreeBased(object):
                 l2_loss += tf.nn.l2_loss(W2)
                 l2_loss += tf.nn.l2_loss(biases_rec)
 
-                self.scores = tf.nn.xw_plus_b(h_drop, W, biases_out, name="scores")
+                self.scores = tf.nn.xw_plus_b(out_repr_drop, W, biases_out, name="scores")
                 self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
                 if is_binary:

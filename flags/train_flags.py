@@ -14,6 +14,9 @@ tf.flags.DEFINE_string("sst_path", "./data/stanford_sentiment_treebank",
                        "Path to SST")
 
 # Model Hyperparameters
+tf.flags.DEFINE_boolean("is_binary", False, "Binary classification or fine-grained")
+tf.flags.DEFINE_boolean("exclude_leaves_loss", False, "Exclude leaves loss from minimization")
+
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
 tf.flags.DEFINE_float("dropout_keep_prob", 0.5,
@@ -26,7 +29,6 @@ tf.flags.DEFINE_integer("num_filters", 128,
                         "Number of filters per filter size (default: 128)")
 
 # Training parameters
-tf.flags.DEFINE_boolean("is_binary", False, "Binary classification or fine-grained")
 tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 200)")
 tf.flags.DEFINE_integer("evaluate_every", 4000, "Evaluate model on dev set after this many steps")
 tf.flags.DEFINE_integer("test_evaluate_every", 8000, "Evaluate model on test set after this many steps")

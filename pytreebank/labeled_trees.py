@@ -35,7 +35,12 @@ class LabeledTree(object):
         self.udepth = udepth
         self.text_list = None
         self.sample = None
-        self.sample_bin = None
+        self.is_binary_task = False
+        self.exclude_leaves_loss = False
+
+    def set_hyperparameters(self, bin_task, exl_leaves):
+        self.is_binary_task = bin_task
+        self.exclude_leaves_loss = exl_leaves
 
     def uproot(tree):
         """
@@ -128,11 +133,9 @@ class LabeledTree(object):
         words = self.to_words()
         return " ".join(words)
 
-    def to_sample(self, vocab, is_binary=False):
-        if not is_binary and self.sample:
+    def to_sample(self, vocab):
+        if self.sample:
             return self.sample
-        if is_binary and self.sample_bin:
-            return self.sample_bin
 
         n = len(self.to_words())
         words_id = [None]*n
@@ -150,18 +153,19 @@ class LabeledTree(object):
                 else:
                     words_id[self.list_num] = 0
 
-                if is_binary:
-                    l = [0, 0]
-                    if node.label < 2:
-                        l[0] = 1
-                    elif node.label > 2:
-                        l[1] = 1
-                    if node.label != 2:
-                       binary_ids.append(self.list_num)
-                else:
-                    l = [0]*5
-                    l[node.label] = 1
-                labels[self.list_num] = l
+                if not self.exclude_leaves_loss:
+                    if self.is_binary_task:
+                        l = [0, 0]
+                        if node.label < 2:
+                            l[0] = 1
+                        elif node.label > 2:
+                            l[1] = 1
+                        if node.label != 2:
+                           binary_ids.append(self.list_num)
+                    else:
+                        l = [0]*5
+                        l[node.label] = 1
+                    labels[self.list_num] = l
 
                 self.list_num += 1
                 return self.list_num - 1
@@ -172,7 +176,7 @@ class LabeledTree(object):
                 left.append(l_n)
                 right.append(r_n)
 
-                if is_binary:
+                if self.is_binary_task:
                     l = [0, 0]
                     if node.label < 2:
                         l[0] = 1
@@ -193,12 +197,14 @@ class LabeledTree(object):
         assert self.vert_num == 2 * n - 1
         assert len(left) == len(right) and len(left) + 1 == len(words_id)
 
-        if is_binary:
-            self.sample_bin = (words_id, left, right, labels, binary_ids)
-            return self.sample_bin
+        if self.exclude_leaves_loss:
+            labels = labels[n:]
+
+        if self.is_binary_task:
+            self.sample = (words_id, left, right, labels, binary_ids)
         else:
             self.sample = (words_id, left, right, labels)
-            return self.sample
+        return self.sample
 
     def __str__(self):
         """

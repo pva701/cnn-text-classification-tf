@@ -1,9 +1,7 @@
 #! /usr/bin/env python3
 
-import os
 import time
 
-import tensorflow as tf
 import numpy as np
 from tensorflow.contrib import learn
 
@@ -12,7 +10,6 @@ from tree_based import TreeBased
 from flags.train_flags import FLAGS
 import pytreebank
 import cnn_window
-import lstm_window
 from train_helpers import *
 
 print("\nParameters:")
@@ -37,6 +34,7 @@ if not os.path.exists(checkpoint_dir):
 
 is_binary_task = FLAGS.is_binary
 print("Binary classification task:", is_binary_task)
+print("Exclude leaves loss:", FLAGS.exclude_leaves_loss)
 
 # Load data
 print("Loading data...")
@@ -81,25 +79,27 @@ print("Vocabulary Size: {:d}".format(vocab_size))
 print("Train/Dev/Test split: {:d}/{:d}/{:d}".
       format(len(x_train), len(x_dev), len(x_test)))
 
-def to_sample_list(x_data):
+def apply_hyperparameters(x_data):
     x_ret = []
     for x in x_data:
-        x.to_sample(vocab_dict, is_binary_task)
+        x.set_hyperparameters(is_binary_task, FLAGS.exclude_leaves_loss)
+        res = x.to_sample(vocab_dict)
+
         if is_binary_task:
-            if len(x.sample_bin[4]) != 0:
+            if len(res[4]) != 0:
                 x_ret.append(x)
         else:
             x_ret.append(x)
     return x_ret
 
 
-print("To sample")
-x_train = to_sample_list(x_train)
-x_dev = to_sample_list(x_dev)
-x_test = to_sample_list(x_test)
+print("Hyper-parameters setting to trees")
+x_train = apply_hyperparameters(x_train)
+x_dev = apply_hyperparameters(x_dev)
+x_test = apply_hyperparameters(x_test)
 
 n = len(x_train)
-print("To sample finished")
+print("Hyper-parameters setting to trees finished")
 
 # Training
 # ==================================================
@@ -125,6 +125,7 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             recursive_size=300,
             window_algo=window_algo,
+            exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
             l2_reg_lambda=FLAGS.l2_reg_lambda)
