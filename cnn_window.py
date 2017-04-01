@@ -12,7 +12,7 @@ class CnnWindow:
         self.channels = channels
 
     def init_with_scope(self):
-        with tf.variable_scope("internal-state"):
+        with tf.variable_scope("cnn"):
             for i, filter_size in enumerate(self.filter_sizes):
                 with tf.name_scope("conv-maxpool-{}".format(filter_size)):
                     # Convolution Layer
@@ -24,26 +24,27 @@ class CnnWindow:
 
     def build_graph(self, embedded_vectors, n_words, dropout_keep_prob):
         expanded_vectors = tf.expand_dims(tf.expand_dims(embedded_vectors, 0), -1)
-        conv_outputs = []
-        for i, filter_size in enumerate(self.filter_sizes):
-            with tf.name_scope("conv-maxpool-{}".format(filter_size)):
-                W = tf.get_variable("W_conv_{}".format(filter_size))
-                b = tf.get_variable("b_conv_{}".format(filter_size))
-                padding = tf.zeros([1, filter_size - 1, self.embedding_size, 1])
-                conv = tf.nn.conv2d(
-                    tf.concat([expanded_vectors, padding], 1),
-                    W,
-                    strides=[1, 1, 1, 1],
-                    padding="VALID",
-                    name="conv")
-                # print("CONV: ", conv.get_shape())
-                # Apply nonlinearity
-                h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
-                # print("H: ", h.get_shape())
-                conv_outputs.append(h)
+        with tf.variable_scope("cnn") as scope:
+            scope.reuse_variables()
 
-        conc_conv = tf.concat(conv_outputs, 3)
-        flat_conv_unreg = tf.reshape(conc_conv, [-1, self.num_filters_total])
+            conv_outputs = []
+            for i, filter_size in enumerate(self.filter_sizes):
+                with tf.name_scope("conv-maxpool-{}".format(filter_size)):
+                    W = tf.get_variable("W_conv_{}".format(filter_size))
+                    b = tf.get_variable("b_conv_{}".format(filter_size))
+                    padding = tf.zeros([1, filter_size - 1, self.embedding_size, 1])
+                    conv = tf.nn.conv2d(
+                        tf.concat([expanded_vectors, padding], 1),
+                        W,
+                        strides=[1, 1, 1, 1],
+                        padding="VALID",
+                        name="conv")
+                    # Apply nonlinearity
+                    h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
+                    conv_outputs.append(h)
+
+            conc_conv = tf.concat(conv_outputs, 3)
+            flat_conv_unreg = tf.reshape(conc_conv, [-1, self.num_filters_total])
 
         # Add dropout
         with tf.name_scope("dropout"):

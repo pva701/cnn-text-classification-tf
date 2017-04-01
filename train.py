@@ -144,8 +144,8 @@ def init_summaries():
     # Summaries for loss and accuracy
     loss_summary = tf.summary.scalar("loss", tree_nn.loss)
     acc_summary = tf.summary.scalar("accuracy", tree_nn.accuracy)
-    # root_loss_summary = tf.summary.scalar("root_loss", tree_nn.root_loss)
-    # root_acc_summary = tf.summary.scalar("root_accuracy", tree_nn.root_accuracy)
+    #root_loss_summary = tf.summary.scalar("root_loss", tree_nn.root_loss)
+    #root_acc_summary = tf.summary.scalar("root_accuracy", tree_nn.root_accuracy)
 
     # Train Summaries
     train_summary_op = tf.summary.merge([loss_summary, acc_summary, grad_summaries_merged])
@@ -249,14 +249,14 @@ with tf.Graph().as_default():
     with sess.as_default():
         real_embedding_size = FLAGS.embedding_dim if FLAGS.embedding_dim else word2vec_matrix.shape[1]
 
-        # window_algo = cnn_window.CnnWindow(
-        #     filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
-        #     num_filters=FLAGS.num_filters,
-        #     embedding_size=real_embedding_size)
+        window_algo = cnn_window.CnnWindow(
+            filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
+            num_filters=FLAGS.num_filters,
+            embedding_size=real_embedding_size)
 
-        window_algo = lstm_window.LstmWindow(
-            hidden_size=200,
-            embedded_size=real_embedding_size)
+        # window_algo = lstm_window.LstmWindow(
+        #     hidden_size=200,
+        #     embedded_size=real_embedding_size)
 
         tree_nn = TreeBased(
             is_binary_task,
