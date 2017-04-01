@@ -167,7 +167,8 @@ class TreeBased(object):
                     correct_predictions = \
                         tf.equal(self.predictions, tf.argmax(self.labels, 1))
 
-                self.root_accuracy = tf.equal(self.predictions[-1],
-                                              tf.argmax(self.labels[-1], axis=0),
-                                              name="root_accuracy")
+                self.root_accuracy = \
+                    tf.equal(self.predictions[-1],
+                             tf.argmax(self.labels[-1], axis=0),
+                             name="root_accuracy")
                 self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")

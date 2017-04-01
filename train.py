@@ -13,150 +13,12 @@ from flags.train_flags import FLAGS
 import pytreebank
 import cnn_window
 import lstm_window
+from train_helpers import *
 
 print("\nParameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
     print("{}={}".format(attr.upper(), value))
 print("")
-
-
-def eval_dataset(x_dataset, evaluator):
-    sum_loss = 0.0
-    sum_root_loss = 0.0
-    sum_acc = 0.0
-    sum_root_acc = 0.0
-    examples = 0
-    examples_root = 0
-
-    for ex in x_dataset:
-        l, ac, rl, rac = evaluator(ex)
-        sum_loss += l
-        sum_acc += ac
-        if rl:
-            examples_root += 1
-            sum_root_loss += rl
-            sum_root_acc += rac
-        examples += 1
-
-    sum_loss /= examples
-    sum_acc /= examples
-    sum_root_loss /= examples_root
-    sum_root_acc /= examples_root
-    return sum_loss, sum_acc, sum_root_loss, sum_root_acc
-
-def train_sample(tree, tree_nn, vocab_dict, is_binary, summary=None):
-    if is_binary:
-        x, left, right, labels, binary_ids = \
-            tree.to_sample(vocab_dict, is_binary=True)
-        if binary_ids[-1] == 2 * len(x) - 2:
-            root_valid = True
-        else:
-            root_valid = False
-    else:
-        binary_ids = []
-        root_valid = True
-        x, left, right, labels = tree.to_sample(vocab_dict)
-
-    feed_dict = {
-        tree_nn.words: x,
-        tree_nn.n_words: len(x),
-        tree_nn.left: left,
-        tree_nn.right: right,
-        tree_nn.labels: labels,
-        tree_nn.binary_ids: binary_ids,
-        tree_nn.dropout_keep_prob: FLAGS.dropout_keep_prob
-    }
-
-    if summary:
-        _, step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
-            [train_op, global_step, summary[1], tree_nn.loss, tree_nn.accuracy, tree_nn.root_loss, tree_nn.root_accuracy],
-            feed_dict)
-    else:
-        _, step, loss, accuracy, root_loss, root_acc = sess.run(
-            [train_op, global_step, tree_nn.loss, tree_nn.accuracy, tree_nn.root_loss, tree_nn.root_accuracy],
-            feed_dict)
-
-    if summary:
-        summary[0].add_summary(summaries, step)
-
-    if root_valid:
-        return loss, accuracy, root_loss, root_acc
-    return loss, accuracy, None, None
-
-def dev_sample(tree, tree_nn, vocab_dict, is_binary, summary=None):
-    if is_binary:
-        x, left, right, labels, binary_ids = tree.to_sample(vocab_dict, is_binary=True)
-        if binary_ids[-1] == 2 * len(x) - 2:
-            root_valid = True
-        else:
-            root_valid = False
-    else:
-        binary_ids = []
-        root_valid = True
-        x, left, right, labels = tree.to_sample(vocab_dict)
-
-    feed_dict = {
-        tree_nn.words: x,
-        tree_nn.n_words: len(x),
-        tree_nn.left: left,
-        tree_nn.right: right,
-        tree_nn.labels: labels,
-        tree_nn.binary_ids: binary_ids,
-        tree_nn.dropout_keep_prob: 1.0
-    }
-
-    if summary:
-        step, summaries, loss, accuracy, root_loss, root_acc = sess.run(
-            [global_step,
-             summary[1],
-             tree_nn.loss,
-             tree_nn.accuracy,
-             tree_nn.root_loss,
-             tree_nn.root_accuracy],
-            feed_dict)
-    else:
-        step, loss, accuracy, root_loss, root_acc = sess.run(
-            [global_step,
-             tree_nn.loss,
-             tree_nn.accuracy,
-             tree_nn.root_loss,
-             tree_nn.root_accuracy],
-            feed_dict)
-
-    if summary:
-        summary[0].add_summary(summaries, step)
-
-    if root_valid:
-        return loss, accuracy, root_loss, root_acc
-    return loss, accuracy, None, None
-
-def init_summaries():
-    # Keep track of gradient values and sparsity (optional)
-    grad_summaries = []
-    for g, v in grads_and_vars:
-        if g is not None:
-            grad_hist_summary = tf.summary.histogram("{}/grad/hist".format(v.name), g)
-            sparsity_summary = tf.summary.scalar("{}/grad/sparsity".format(v.name), tf.nn.zero_fraction(g))
-            grad_summaries.append(grad_hist_summary)
-            grad_summaries.append(sparsity_summary)
-    grad_summaries_merged = tf.summary.merge(grad_summaries)
-
-    # Summaries for loss and accuracy
-    loss_summary = tf.summary.scalar("loss", tree_nn.loss)
-    acc_summary = tf.summary.scalar("accuracy", tree_nn.accuracy)
-    #root_loss_summary = tf.summary.scalar("root_loss", tree_nn.root_loss)
-    #root_acc_summary = tf.summary.scalar("root_accuracy", tree_nn.root_accuracy)
-
-    # Train Summaries
-    train_summary_op = tf.summary.merge([loss_summary, acc_summary, grad_summaries_merged])
-    train_summary_dir = os.path.join(out_dir, "summaries", "train")
-    train_summary_writer = tf.summary.FileWriter(train_summary_dir, sess.graph)
-
-    # Dev summaries
-    dev_summary_op = tf.summary.merge([loss_summary, acc_summary])
-    dev_summary_dir = os.path.join(out_dir, "summaries", "dev")
-    dev_summary_writer = tf.summary.FileWriter(dev_summary_dir, sess.graph)
-    return train_summary_writer, train_summary_op, dev_summary_writer, dev_summary_op
 
 
 # Data Preparation
@@ -279,7 +141,7 @@ with tf.Graph().as_default():
         grads_and_vars = optimizer.compute_gradients(tree_nn.loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
-        train_summary_writer, train_summary_op, dev_summary_writer, dev_summary_op = init_summaries()
+        train_summary_writer, dev_summary_writer, test_summary_writer = init_summary_writers(sess, out_dir)
 
         saver = tf.train.Saver(tf.global_variables(), max_to_keep=FLAGS.num_checkpoints)
         # Initialize all variables
@@ -299,9 +161,8 @@ with tf.Graph().as_default():
 
         for epoch in range(FLAGS.num_epochs):
             for sample_id in np.random.permutation(n):
-                lt, at, rlt, rat = train_sample(x_train[sample_id], tree_nn, vocab_dict,
-                                                is_binary_task,
-                                                summary=(train_summary_writer, train_summary_op))
+                lt, at, rlt, rat = train_sample(x_train[sample_id], tree_nn, vocab_dict, is_binary_task,
+                                                sess, train_op, global_step, FLAGS.dropout_keep_prob)
                 sum_train_loss += lt
                 sum_train_acc += at
                 if rlt:
@@ -319,6 +180,13 @@ with tf.Graph().as_default():
                                  sum_train_acc / TRAIN_MEAS_BATCH,
                                  sum_train_root_loss / root_cnt,
                                  sum_train_root_acc / root_cnt))
+
+                    add_summary(sum_train_loss / TRAIN_MEAS_BATCH,
+                                sum_train_acc / TRAIN_MEAS_BATCH,
+                                sum_train_root_loss / root_cnt,
+                                sum_train_root_acc / root_cnt,
+                                (train_summary_writer, current_step // TRAIN_MEAS_BATCH))
+
                     root_cnt = 0
                     sum_train_loss = 0.0
                     sum_train_root_loss = 0.0
@@ -329,18 +197,21 @@ with tf.Graph().as_default():
                 if current_step % FLAGS.evaluate_every == 0:
                     dev_loss, dev_acc, dev_root_loss, dev_root_acc = \
                         eval_dataset(x_dev, lambda ex: dev_sample(ex, tree_nn, vocab_dict, is_binary_task,
-                                                                  summary=(dev_summary_writer, dev_summary_op)))
+                                                                  sess, global_step),
+                                     (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
                     print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
-                          format(dev_loss, dev_acc, dev_root_acc, dev_root_acc))
+                          format(dev_loss, dev_acc, dev_root_loss, dev_root_acc))
                     max_dev = max(max_dev, dev_root_acc)
                     print("Max dev evaluation root accuracy: {:g}".format(max_dev))
                     print("")
 
                 if current_step % FLAGS.test_evaluate_every == 0:
                     test_loss, test_acc, test_root_loss, test_root_acc = \
-                        eval_dataset(x_test, lambda ex: dev_sample(ex, tree_nn, vocab_dict, is_binary_task))
+                        eval_dataset(x_test, lambda ex: dev_sample(ex, tree_nn, vocab_dict, is_binary_task,
+                                                                   sess, global_step),
+                                     (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
                     print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
-                          format(test_loss, test_acc, test_root_acc, test_root_acc))
+                          format(test_loss, test_acc, test_root_loss, test_root_acc))
                     max_test = max(max_test, test_root_acc)
                     print("Max test evaluation root accuracy: {:g}".format(max_test))
                     print("")
