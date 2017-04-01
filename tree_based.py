@@ -7,7 +7,7 @@ class TreeBased(object):
                                 , num_classes
                                 , vocab_size
                                 , recursive_size
-                                , window_vector_size
+                                , window_algo
                                 , embedding_size=None
                                 , pretrained_embedding=None):
         with tf.variable_scope("internal-state"):
@@ -22,6 +22,9 @@ class TreeBased(object):
                     _ = tf.get_variable("embedding",
                                         shape=[vocab_size, embedding_size],
                                         initializer=tf.constant_initializer(pretrained_embedding, dtype=np.float32))
+
+            window_vector_size = window_algo.output_vector_size()
+            window_algo.init_with_scope()
 
             with tf.name_scope("recursive"):
                 if not recursive_size:
@@ -67,7 +70,7 @@ class TreeBased(object):
             num_classes = 5
 
         self.init_binary_tree_simple(num_classes, vocab_size, recursive_size,
-                                     window_algo.output_vector_size(),
+                                     window_algo,
                                      embedding_size, pretrained_embedding)
 
         self.words = tf.placeholder(tf.int32, [None], "words")  # n
@@ -84,15 +87,13 @@ class TreeBased(object):
             with tf.name_scope("embedding"):
                 embedding_matrix = tf.get_variable("embedding")
                 embedded_vectors = tf.nn.embedding_lookup(embedding_matrix, self.words)
-                expanded_vectors = tf.expand_dims(tf.expand_dims(embedded_vectors, 0), -1)
 
             # Window here
-            windows_repr = window_algo.build_graph(expanded_vectors, self.dropout_keep_prob)
+            windows_repr = window_algo.build_graph(embedded_vectors, self.n_words, self.dropout_keep_prob)
 
             if recursive_size:
                 W_t = tf.get_variable("W_t")
                 biases_t = tf.get_variable("biases_t")
-
                 leaves_vectors = tf.nn.sigmoid(tf.matmul(windows_repr, W_t) + biases_t)
             else:
                 leaves_vectors = windows_repr

@@ -12,6 +12,7 @@ from tree_based import TreeBased
 from flags.train_flags import FLAGS
 import pytreebank
 import cnn_window
+import lstm_window
 
 print("\nParameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
@@ -206,8 +207,8 @@ if FLAGS.embedding_dim is None:  # use pretrained
     else:
         print("Loading word2vec for dataset...")
         word2vec = data_helpers.load_pickle_word_vecs_np(FLAGS.dataset_word2vec_path)
-        print("Word2Vec words = ", len(word2vec))
-        print("Wrod2Vec dim = ", len(list(word2vec.items())[0][1]))
+        print("Word2Vec words:", len(word2vec))
+        print("Wrod2Vec dim:", len(list(word2vec.items())[0][1]))
 
     data_helpers.add_unknown_words(word2vec, vocab_dict)
     list_vecs = [None] * vocab_size
@@ -248,16 +249,20 @@ with tf.Graph().as_default():
     with sess.as_default():
         real_embedding_size = FLAGS.embedding_dim if FLAGS.embedding_dim else word2vec_matrix.shape[1]
 
-        cnn_window = cnn_window.CnnWindow(
-            filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
-            num_filters=FLAGS.num_filters,
-            embedding_size=real_embedding_size)
+        # window_algo = cnn_window.CnnWindow(
+        #     filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
+        #     num_filters=FLAGS.num_filters,
+        #     embedding_size=real_embedding_size)
+
+        window_algo = lstm_window.LstmWindow(
+            hidden_size=200,
+            embedded_size=real_embedding_size)
 
         tree_nn = TreeBased(
             is_binary_task,
             vocab_size=len(vocab_processor.vocabulary_),
             recursive_size=300,
-            window_algo=cnn_window,
+            window_algo=window_algo,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
             l2_reg_lambda=FLAGS.l2_reg_lambda)
