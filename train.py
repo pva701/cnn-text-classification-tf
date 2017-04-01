@@ -175,6 +175,8 @@ with tf.Graph().as_default():
 
         max_dev = 0.0
         max_test = 0.0
+        dev_iter = 0
+        test_iter = 0
 
         for epoch in range(FLAGS.num_epochs):
             for sample_id in np.random.permutation(n):
@@ -218,8 +220,11 @@ with tf.Graph().as_default():
                                      (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
                     print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(dev_loss, dev_acc, dev_root_loss, dev_root_acc))
-                    max_dev = max(max_dev, dev_root_acc)
-                    print("Max dev evaluation root accuracy: {:g}".format(max_dev))
+                    if dev_root_acc > max_dev:
+                        max_dev = dev_root_acc
+                        dev_iter = current_step // TRAIN_MEAS_BATCH
+
+                    print("Max dev evaluation root accuracy: {:g}, on batch = {}".format(max_dev, dev_iter))
                     print("")
 
                 if current_step % FLAGS.test_evaluate_every == 0:
@@ -229,8 +234,11 @@ with tf.Graph().as_default():
                                      (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
                     print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(test_loss, test_acc, test_root_loss, test_root_acc))
-                    max_test = max(max_test, test_root_acc)
-                    print("Max test evaluation root accuracy: {:g}".format(max_test))
+                    if test_root_acc > max_test:
+                        max_test = test_root_acc
+                        test_iter = current_step // TRAIN_MEAS_BATCH
+
+                    print("Max test evaluation root accuracy: {:g}, on batch = {}".format(max_test, test_iter))
                     print("")
 
                 if current_step % FLAGS.checkpoint_every == 0:
