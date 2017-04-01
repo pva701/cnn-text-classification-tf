@@ -27,11 +27,18 @@ timestamp = str(int(time.time()))
 out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
 print("Writing to {}\n".format(out_dir))
 
+
+
 # Checkpoint directory. Tensorflow assumes this directory already exists so we need to create it
 checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
 checkpoint_prefix = os.path.join(checkpoint_dir, "model")
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
+
+descr_file = os.path.join(out_dir, 'descr-' + str(timestamp) + '.txt')
+with open(descr_file, 'w+') as out:
+    for attr, value in sorted(FLAGS.__flags.items()):
+        out.write("{}={}\n".format(attr.upper(), value))
 
 is_binary_task = FLAGS.is_binary
 print("Binary classification task:", is_binary_task)
