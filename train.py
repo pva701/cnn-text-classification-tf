@@ -90,7 +90,7 @@ print("Train/Dev/Test split: {:d}/{:d}/{:d}".
 def apply_hyperparameters(x_data):
     x_ret = []
     for x in x_data:
-        x.set_hyperparameters(is_binary_task, FLAGS.exclude_leaves_loss)
+        x.set_hyperparameters(is_binary_task, FLAGS.exclude_leaves_loss, FLAGS.weight_loss)
         res = x.to_sample(vocab_dict)
 
         if is_binary_task:
@@ -137,6 +137,7 @@ with tf.Graph().as_default():
             recursive_size=FLAGS.recursive_size,
             window_algo=window_algo,
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
+            is_weight_loss=FLAGS.weight_loss,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
             l2_reg_lambda=FLAGS.l2_reg_lambda)

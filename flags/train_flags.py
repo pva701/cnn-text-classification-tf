@@ -16,6 +16,7 @@ tf.flags.DEFINE_string("sst_path", "./data/stanford_sentiment_treebank",
 # Model Hyperparameters
 tf.flags.DEFINE_boolean("is_binary", False, "Binary classification or fine-grained")
 tf.flags.DEFINE_boolean("exclude_leaves_loss", False, "Exclude leaves loss from minimization")
+tf.flags.DEFINE_boolean("weight_loss", True, "Weight loss (depends on length subtree)")
 
 tf.flags.DEFINE_string("window_algo", "CNN", "Specify window algo")
 tf.flags.DEFINE_integer("recursive_size", None,
@@ -28,7 +29,7 @@ tf.flags.DEFINE_float("dropout_keep_prob", 0.5,
                       "Dropout keep probability (default: 0.5)")
 tf.flags.DEFINE_float("l2_reg_lambda", 0.0000,
                       "L2 regularization lambda (default: 0.0)")
-tf.flags.DEFINE_string("filter_sizes", "3,4,5",
+tf.flags.DEFINE_string("filter_sizes", "2, 3, 4",
                        "Comma-separated filter sizes (default: '3,4,5')")
 tf.flags.DEFINE_integer("num_filters", 128,
                         "Number of filters per filter size (default: 128)")

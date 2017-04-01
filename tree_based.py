@@ -60,6 +60,7 @@ class TreeBased(object):
                  vocab_size,
                  window_algo,
                  exclude_leaves_loss,
+                 is_weight_loss,
                  recursive_size=None,
                  embedding_size=None,
                  pretrained_embedding=None,
@@ -81,6 +82,7 @@ class TreeBased(object):
         self.right = tf.placeholder(tf.int32, [None], "right")  # n - 1
         self.labels = tf.placeholder(tf.int32, [None, num_classes], "labels")  # 2n-1x5
         self.binary_ids = tf.placeholder(tf.int32, [None], "binary_ids")
+        self.weights_loss = tf.placeholder(tf.float32, [None], "weights_loss")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
         with tf.variable_scope("internal-state") as scope:
@@ -157,7 +159,12 @@ class TreeBased(object):
                         labels=self.labels[-1],
                         logits=self.scores[-1],
                         name="root_loss")
-                self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
+
+                if is_weight_loss:
+                    self.loss = tf.reduce_sum(tf.multiply(self.weights_loss, losses)) + \
+                                l2_reg_lambda * l2_loss
+                else:
+                    self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
 
             # Accuracy
             with tf.name_scope("accuracy"):

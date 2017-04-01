@@ -33,14 +33,17 @@ class LabeledTree(object):
         self.parent = parent
         self.depth = depth
         self.udepth = udepth
+        self.subsent_len = 0
         self.text_list = None
         self.sample = None
         self.is_binary_task = False
         self.exclude_leaves_loss = False
+        self.is_weights = True
 
-    def set_hyperparameters(self, bin_task, exl_leaves):
+    def set_hyperparameters(self, bin_task, exl_leaves, is_weights):
         self.is_binary_task = bin_task
         self.exclude_leaves_loss = exl_leaves
+        self.is_weights = is_weights
 
     def uproot(tree):
         """
@@ -143,6 +146,7 @@ class LabeledTree(object):
         right = []
         labels = [None] * (2 * n - 1)
         binary_ids = []
+        weights = [None] * (2 * n - 1)
         self.list_num = 0
         self.vert_num = n
 
@@ -152,6 +156,8 @@ class LabeledTree(object):
                     words_id[self.list_num] = vocab[node.text]
                 else:
                     words_id[self.list_num] = 0
+
+                node.subsent_len = 1
 
                 if not self.exclude_leaves_loss:
                     if self.is_binary_task:
@@ -163,9 +169,10 @@ class LabeledTree(object):
                         if node.label != 2:
                            binary_ids.append(self.list_num)
                     else:
-                        l = [0]*5
+                        l = [0] * 5
                         l[node.label] = 1
                     labels[self.list_num] = l
+                weights[self.list_num] = 1
 
                 self.list_num += 1
                 return self.list_num - 1
@@ -175,6 +182,9 @@ class LabeledTree(object):
                 r_n = rec(node.children[1])
                 left.append(l_n)
                 right.append(r_n)
+
+                node.subsent_len = node.children[0].subsent_len + \
+                                   node.children[1].subsent_len
 
                 if self.is_binary_task:
                     l = [0, 0]
@@ -188,6 +198,7 @@ class LabeledTree(object):
                     l = [0]*5
                     l[node.label] = 1
                 labels[self.vert_num] = l
+                weights[self.vert_num] = node.subsent_len
 
                 self.vert_num += 1
                 return self.vert_num - 1
@@ -199,11 +210,16 @@ class LabeledTree(object):
 
         if self.exclude_leaves_loss:
             labels = labels[n:]
+            weights = weights[n:]
 
-        if self.is_binary_task:
-            self.sample = (words_id, left, right, labels, binary_ids)
+        if self.is_weights:
+            sm = sum(weights)
+            for i in range(len(weights)):
+                weights[i] = weights[i] * 1.0 / sm
         else:
-            self.sample = (words_id, left, right, labels)
+            weights = []
+
+        self.sample = (words_id, left, right, labels, weights, binary_ids)
         return self.sample
 
     def __str__(self):

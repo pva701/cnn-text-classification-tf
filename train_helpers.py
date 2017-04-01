@@ -5,9 +5,9 @@ import os
 
 
 def train_sample(tree, tree_nn, vocab_dict, is_binary, sess, train_op, global_step, dropout_k):
+    x, left, right, labels, weights, binary_ids = tree.to_sample(vocab_dict)
+
     if is_binary:
-        x, left, right, labels, binary_ids = \
-            tree.to_sample(vocab_dict, is_binary=True)
         if binary_ids[-1] == 2 * len(x) - 2:
             root_valid = True
         else:
@@ -15,7 +15,6 @@ def train_sample(tree, tree_nn, vocab_dict, is_binary, sess, train_op, global_st
     else:
         binary_ids = []
         root_valid = True
-        x, left, right, labels = tree.to_sample(vocab_dict)
 
     feed_dict = {
         tree_nn.words: x,
@@ -24,6 +23,7 @@ def train_sample(tree, tree_nn, vocab_dict, is_binary, sess, train_op, global_st
         tree_nn.right: right,
         tree_nn.labels: labels,
         tree_nn.binary_ids: binary_ids,
+        tree_nn.weights_loss: weights,
         tree_nn.dropout_keep_prob: dropout_k
     }
 
@@ -37,8 +37,9 @@ def train_sample(tree, tree_nn, vocab_dict, is_binary, sess, train_op, global_st
     return loss, accuracy, None, None
 
 def dev_sample(tree, tree_nn, vocab_dict, is_binary, sess, global_step):
+    x, left, right, labels, weights, binary_ids = tree.to_sample(vocab_dict)
+
     if is_binary:
-        x, left, right, labels, binary_ids = tree.to_sample(vocab_dict, is_binary=True)
         if binary_ids[-1] == 2 * len(x) - 2:
             root_valid = True
         else:
@@ -46,7 +47,6 @@ def dev_sample(tree, tree_nn, vocab_dict, is_binary, sess, global_step):
     else:
         binary_ids = []
         root_valid = True
-        x, left, right, labels = tree.to_sample(vocab_dict)
 
     feed_dict = {
         tree_nn.words: x,
@@ -55,6 +55,7 @@ def dev_sample(tree, tree_nn, vocab_dict, is_binary, sess, global_step):
         tree_nn.right: right,
         tree_nn.labels: labels,
         tree_nn.binary_ids: binary_ids,
+        tree_nn.weights_loss: weights,
         tree_nn.dropout_keep_prob: 1.0
     }
 
@@ -69,13 +70,13 @@ def dev_sample(tree, tree_nn, vocab_dict, is_binary, sess, global_step):
 
 def init_summary_writers(sess, out_dir):
     train_summary_dir = os.path.join(out_dir, "summaries", "train")
-    train_summary_writer = tf.summary.FileWriter(train_summary_dir, sess.graph)
+    train_summary_writer = tf.summary.FileWriter(train_summary_dir, sess.graph, flush_secs=60)
 
     dev_summary_dir = os.path.join(out_dir, "summaries", "dev")
-    dev_summary_writer = tf.summary.FileWriter(dev_summary_dir, sess.graph)
+    dev_summary_writer = tf.summary.FileWriter(dev_summary_dir, sess.graph, flush_secs=60)
 
     test_summary_dir = os.path.join(out_dir, "summaries", "test")
-    test_summary_writer = tf.summary.FileWriter(test_summary_dir, sess.graph)
+    test_summary_writer = tf.summary.FileWriter(test_summary_dir, sess.graph, flush_secs=60)
     return train_summary_writer, dev_summary_writer, test_summary_writer
 
 def eval_dataset(x_dataset, evaluator, summary=None):
