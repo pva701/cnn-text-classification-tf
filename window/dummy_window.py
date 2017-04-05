@@ -1,5 +1,6 @@
 __author__ = 'pva701'
 
+import tensorflow as tf
 
 class DummyWindow:
 
@@ -14,3 +15,6 @@ class DummyWindow:
 
     def output_vector_size(self):
         return self.embedding_size
+
+    def l2_loss(self):
+        return tf.constant(0.0, dtype=tf.float32)

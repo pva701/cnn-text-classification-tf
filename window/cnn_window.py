@@ -53,3 +53,6 @@ class CnnWindow:
 
     def output_vector_size(self):
         return self.num_filters_total
+
+    def l2_loss(self):
+        return tf.constant(0.0)

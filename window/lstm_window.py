@@ -40,9 +40,14 @@ class LstmWindow:
 
                 return tf.reshape(tf.concat(cell_outputs, 1), [-1])
 
-            return tf.map_fn(compute_vector, tf.range(tf.constant(0), n_words), dtype=tf.float32)
+            ret = tf.map_fn(compute_vector, tf.range(tf.constant(0), n_words), dtype=tf.float32)
+            # Add dropout
+            with tf.name_scope("dropout"):
+                return tf.nn.dropout(ret, dropout_keep_prob)
 
     def output_vector_size(self):
         return self.out_size
 
 
+    def l2_loss(self):
+        return tf.constant(0.0)

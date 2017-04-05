@@ -20,7 +20,7 @@ tf.flags.DEFINE_boolean("weight_loss", True, "Weight loss (depends on length sub
 
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
-tf.flags.DEFINE_string("window_algo", "CNN", "Specify window algo: CNN|LSTM|DUMMY")
+tf.flags.DEFINE_string("window_algo", "DUMMY", "Specify window algo: CNN|LSTM|DUMMY")
 tf.flags.DEFINE_string("processing_algo", "TREE-LSTM", "Specify processing algo: SIMPLE|TREE-LSTM")
 tf.flags.DEFINE_integer("mem_size", 150,
                         "Size of memory and hidden state (TREE-LSTM")

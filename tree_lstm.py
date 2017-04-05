@@ -4,11 +4,13 @@ import tensorflow as tf
 
 
 class TreeLstm:
-
     def __init__(self, mem_size):
+        self._params_names = []
         self.mem_size = mem_size
 
     def _create_linear(self, name, in_size, out_size):
+        self._params_names.append("W_" + name)
+        self._params_names.append("b_" + name)
         tf.get_variable("W_" + name, [in_size, out_size], initializer=tf.contrib.layers.xavier_initializer())
         tf.get_variable("b_" + name, [out_size], initializer=tf.zeros_initializer())
 
@@ -43,7 +45,7 @@ class TreeLstm:
         return tf.matmul(tf.expand_dims(lh, 0), W_l) + b_l + \
                tf.matmul(tf.expand_dims(rh, 0), W_r) + b_r
 
-    def build_graph(self, inputs, left, right, n_words, dropout_keep_probs):
+    def build_graph(self, inputs, left, right, n_words, dropout_keep_prob):
         with tf.variable_scope("tree-lstm") as scope:
             scope.reuse_variables()
 
@@ -76,9 +78,21 @@ class TreeLstm:
 
                     return tf.stack([tf.concat([h_mat, h], 0), tf.concat([c_mat, c], 0)])
 
-                return tf.foldl(compute_hidden_and_memory,
-                                tf.range(tf.constant(0), n_words - 1),
-                                initializer=(h_leaf, c_leaf))[0]
+                ret = tf.foldl(compute_hidden_and_memory,
+                               tf.range(tf.constant(0), n_words - 1),
+                               initializer=(h_leaf, c_leaf))[0]
+                # Add dropout
+                with tf.name_scope("dropout"):
+                    return tf.nn.dropout(ret, dropout_keep_prob)
 
     def output_vector_size(self):
         return self.mem_size
+
+    def l2_loss(self):
+        ret = tf.constant(0.0)
+        with tf.variable_scope("tree-lstm") as scope:
+            scope.reuse_variables()
+
+            for name in self._params_names:
+                ret += tf.nn.l2_loss(tf.get_variable(name))
+        return ret

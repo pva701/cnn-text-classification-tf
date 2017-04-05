@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-class TreeBased(object):
+class TreeBased:
     def init_binary_tree_simple(self
                                 , num_classes
                                 , vocab_size
@@ -71,13 +71,10 @@ class TreeBased(object):
 
             # Window here
             windows_repr = window_algo.build_graph(embedded_vectors, self.n_words, self.dropout_keep_prob)
+
             # Processing here
             out_repr_unstripped = processing_algo.build_graph(windows_repr, self.left, self.right, self.n_words, self.dropout_keep_prob)
             out_repr = out_repr_unstripped if not exclude_leaves_loss else out_repr_unstripped[self.n_words:]
-
-            # Add dropout
-            with tf.name_scope("dropout"):
-                out_repr_drop = tf.nn.dropout(out_repr, self.dropout_keep_prob)
 
             # Calculate Mean cross-entropy loss
             with tf.name_scope("loss"):
@@ -87,13 +84,11 @@ class TreeBased(object):
                 W_out = tf.get_variable("W_out")
                 biases_out = tf.get_variable("biases_out")
 
-                l2_loss += tf.nn.l2_loss(W_out)
-                l2_loss += tf.nn.l2_loss(biases_out)
-                # l2_loss += tf.nn.l2_loss(W1)
-                # l2_loss += tf.nn.l2_loss(W2)
-                # l2_loss += tf.nn.l2_loss(biases_rec)
+                l2_loss += tf.nn.l2_loss(W_out) + tf.nn.l2_loss(biases_out)
+                l2_loss += window_algo.l2_loss()
+                l2_loss += processing_algo.l2_loss()
 
-                self.scores = tf.nn.xw_plus_b(out_repr_drop, W_out, biases_out, name="scores")
+                self.scores = tf.nn.xw_plus_b(out_repr, W_out, biases_out, name="scores")
                 self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
                 if is_binary:
@@ -116,10 +111,10 @@ class TreeBased(object):
                         name="root_loss")
 
                 if is_weight_loss:
-                    self.loss = tf.reduce_sum(tf.multiply(self.weights_loss, losses)) + \
-                                l2_reg_lambda * l2_loss
+                    self.loss = tf.reduce_sum(tf.multiply(self.weights_loss, losses))
                 else:
-                    self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
+                    self.loss = tf.reduce_mean(losses)
+                self.loss += l2_reg_lambda * l2_loss
 
             # Accuracy
             with tf.name_scope("accuracy"):

@@ -2,6 +2,7 @@ __author__ = 'pva701'
 
 import tensorflow as tf
 
+
 class TreeSimple:
     def init_with_scope(self, in_size):
         self.in_size = in_size
@@ -37,7 +38,7 @@ class TreeSimple:
     def __init__(self, recursive_size):
         self.recursive_size = recursive_size
 
-    def build_graph(self, inputs, left, right, n_words, dropout_keep_probs):
+    def build_graph(self, inputs, left, right, n_words, dropout_keep_prob):
         with tf.variable_scope("tree-simple") as scope:
             scope.reuse_variables()
 
@@ -60,11 +61,24 @@ class TreeSimple:
                                        biases_rec)
                 return tf.concat([vectors, vector], 0)
 
-            return tf.foldl(apply_children,
-                            tf.range(tf.constant(0), n_words - 1),
-                            initializer=leaves_vectors)
+            ret = tf.foldl(apply_children,
+                           tf.range(tf.constant(0), n_words - 1),
+                           initializer=leaves_vectors)
+            # Add dropout
+            with tf.name_scope("dropout"):
+                return tf.nn.dropout(ret, dropout_keep_prob)
 
     def output_vector_size(self):
         if not self.recursive_size:
             return self.in_size
         return self.recursive_size
+
+    def l2_loss(self):
+        ret = tf.constant(0.0)
+        if self.recursive_size:
+            ret += tf.nn.l2_loss(tf.get_variable("W_t"))
+            ret += tf.nn.l2_loss(tf.get_variable("biases_t"))
+        ret += tf.nn.l2_loss(tf.get_variable("W1_rec"))
+        ret += tf.nn.l2_loss(tf.get_variable("W2_rec"))
+        ret += tf.nn.l2_loss(tf.get_variable("biases_rec"))
+        return ret
