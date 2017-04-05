@@ -9,9 +9,10 @@ import data_helpers
 from tree_based import TreeBased
 from flags.train_flags import FLAGS
 import pytreebank
-import cnn_window
-import lstm_window
+from window import lstm_window, cnn_window, dummy_window
 from train_helpers import *
+import tree_simple
+import tree_lstm
 
 print("\nParameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
@@ -128,14 +129,23 @@ with tf.Graph().as_default():
             window_algo = lstm_window.LstmWindow(
                 hidden_size=FLAGS.lstm_hidden,
                 embedded_size=real_embedding_size)
+        elif FLAGS.window_algo == "DUMMY":
+            window_algo = dummy_window.DummyWindow(real_embedding_size)
         else:
             raise Exception('Unknown window algo')
+
+        if FLAGS.processing_algo == "SIMPLE":
+            processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size)
+        elif FLAGS.processing_algo == "TREE-LSTM":
+            processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size)
+        else:
+            raise Exception('Unknown processing algo')
 
         tree_nn = TreeBased(
             is_binary_task,
             vocab_size=len(vocab_processor.vocabulary_),
-            recursive_size=FLAGS.recursive_size,
             window_algo=window_algo,
+            processing_algo=processing_algo,
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             is_weight_loss=FLAGS.weight_loss,
             embedding_size=FLAGS.embedding_dim,

@@ -18,21 +18,25 @@ tf.flags.DEFINE_boolean("is_binary", False, "Binary classification or fine-grain
 tf.flags.DEFINE_boolean("exclude_leaves_loss", False, "Exclude leaves loss from minimization")
 tf.flags.DEFINE_boolean("weight_loss", True, "Weight loss (depends on length subtree)")
 
-tf.flags.DEFINE_string("window_algo", "CNN", "Specify window algo")
-tf.flags.DEFINE_integer("recursive_size", None,
-                        "Size of sentiment vectors")
-tf.flags.DEFINE_integer("lstm_hidden", 200, "LSTM hidden size, when use LSTM")
-
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
+tf.flags.DEFINE_string("window_algo", "CNN", "Specify window algo: CNN|LSTM|DUMMY")
+tf.flags.DEFINE_string("processing_algo", "TREE-LSTM", "Specify processing algo: SIMPLE|TREE-LSTM")
+tf.flags.DEFINE_integer("mem_size", 150,
+                        "Size of memory and hidden state (TREE-LSTM")
+
+tf.flags.DEFINE_integer("recursive_size", None,
+                        "Size of sentiment vectors (for SIMPLE processing algo)")
+tf.flags.DEFINE_integer("lstm_hidden", 200, "LSTM hidden size, when use LSTM (for LSTM window)")
+tf.flags.DEFINE_string("filter_sizes", "2, 3, 4",
+                       "Comma-separated filter sizes (default: '2,3,4') (for CNN window)")
+tf.flags.DEFINE_integer("num_filters", 128,
+                        "Number of filters per filter size (default: 128) (for CNN window)")
+
 tf.flags.DEFINE_float("dropout_keep_prob", 0.5,
                       "Dropout keep probability (default: 0.5)")
-tf.flags.DEFINE_float("l2_reg_lambda", 0.0000,
+tf.flags.DEFINE_float("l2_reg_lambda", 0.0001,
                       "L2 regularization lambda (default: 0.0)")
-tf.flags.DEFINE_string("filter_sizes", "2, 3, 4",
-                       "Comma-separated filter sizes (default: '3,4,5')")
-tf.flags.DEFINE_integer("num_filters", 128,
-                        "Number of filters per filter size (default: 128)")
 
 # Training parameters
 tf.flags.DEFINE_string("optimizer", "Adagrad", "Optimizer")

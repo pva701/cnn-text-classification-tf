@@ -6,8 +6,7 @@ class TreeBased(object):
     def init_binary_tree_simple(self
                                 , num_classes
                                 , vocab_size
-                                , recursive_size
-                                , window_algo
+                                , window_algo, processing_algo
                                 , embedding_size=None
                                 , pretrained_embedding=None):
         with tf.variable_scope("internal-state"):
@@ -23,45 +22,24 @@ class TreeBased(object):
                                         shape=[vocab_size, embedding_size],
                                         initializer=tf.constant_initializer(pretrained_embedding, dtype=np.float32))
 
-            window_vector_size = window_algo.output_vector_size()
             window_algo.init_with_scope()
-
-            with tf.name_scope("recursive"):
-                if not recursive_size:
-                    recursive_size = window_vector_size
-                else:
-                    W_t = tf.get_variable("W_t",
-                                          [window_vector_size, recursive_size],
-                                          initializer=tf.contrib.layers.xavier_initializer())
-
-                    biases_t = tf.get_variable("biases_t", [recursive_size],
-                                               initializer=tf.zeros_initializer())
-
-                W1_rec = tf.get_variable("W1_rec",
-                                         [recursive_size, recursive_size],
-                                         initializer=tf.contrib.layers.xavier_initializer())
-                W2_rec = tf.get_variable("W2_rec",
-                                         [recursive_size, recursive_size],
-                                         initializer=tf.contrib.layers.xavier_initializer())
-
-                biases = tf.get_variable("biases_rec", [recursive_size],
-                                         initializer=tf.zeros_initializer())
-
+            window_vector_size = window_algo.output_vector_size()
+            processing_algo.init_with_scope(window_vector_size)
+            processed_vector_size = processing_algo.output_vector_size()
 
             # Final (unnormalized) scores and predictions
             with tf.name_scope("output"):
                 W = tf.get_variable("W_out",
-                                    shape=[recursive_size, num_classes],
+                                    shape=[processed_vector_size, num_classes],
                                     initializer=tf.contrib.layers.xavier_initializer())
                 biases = tf.get_variable("biases_out", [num_classes], initializer=tf.zeros_initializer())
 
     def __init__(self,
                  is_binary,
                  vocab_size,
-                 window_algo,
+                 window_algo, processing_algo,
                  exclude_leaves_loss,
                  is_weight_loss,
-                 recursive_size=None,
                  embedding_size=None,
                  pretrained_embedding=None,
                  l2_reg_lambda=0.0):
@@ -71,8 +49,8 @@ class TreeBased(object):
         else:
             num_classes = 5
 
-        self.init_binary_tree_simple(num_classes, vocab_size, recursive_size,
-                                     window_algo,
+        self.init_binary_tree_simple(num_classes, vocab_size,
+                                     window_algo, processing_algo,
                                      embedding_size, pretrained_embedding)
 
         self.words = tf.placeholder(tf.int32, [None], "words")  # n
@@ -93,32 +71,9 @@ class TreeBased(object):
 
             # Window here
             windows_repr = window_algo.build_graph(embedded_vectors, self.n_words, self.dropout_keep_prob)
-
-            if recursive_size:
-                W_t = tf.get_variable("W_t")
-                biases_t = tf.get_variable("biases_t")
-                leaves_vectors = tf.nn.sigmoid(tf.matmul(windows_repr, W_t) + biases_t)
-            else:
-                leaves_vectors = windows_repr
-
-            with tf.name_scope("recursive"):
-                W1 = tf.get_variable("W1_rec")
-                W2 = tf.get_variable("W2_rec")
-                biases_rec = tf.get_variable("biases_rec")
-
-                def apply_children(vectors, i):
-                    lc = vectors[self.left[i]]
-                    rc = vectors[self.right[i]]
-                    vector = tf.nn.sigmoid(tf.matmul(tf.expand_dims(lc, 0), W1) +
-                                           tf.matmul(tf.expand_dims(rc, 0), W2) +
-                                           biases_rec)
-                    return tf.concat([vectors, vector], 0)
-
-                out_repr_unstripped = tf.foldl(apply_children,
-                                  tf.range(tf.constant(0), self.n_words - 1),
-                                  initializer=leaves_vectors)
-
-                out_repr = out_repr_unstripped if not exclude_leaves_loss else out_repr_unstripped[self.n_words:]
+            # Processing here
+            out_repr_unstripped = processing_algo.build_graph(windows_repr, self.left, self.right, self.n_words, self.dropout_keep_prob)
+            out_repr = out_repr_unstripped if not exclude_leaves_loss else out_repr_unstripped[self.n_words:]
 
             # Add dropout
             with tf.name_scope("dropout"):
@@ -129,16 +84,16 @@ class TreeBased(object):
                 # Keeping track of l2 regularization loss (optional)
                 l2_loss = tf.constant(0.0)
 
-                W = tf.get_variable("W_out")
+                W_out = tf.get_variable("W_out")
                 biases_out = tf.get_variable("biases_out")
 
-                l2_loss += tf.nn.l2_loss(W)
+                l2_loss += tf.nn.l2_loss(W_out)
                 l2_loss += tf.nn.l2_loss(biases_out)
-                l2_loss += tf.nn.l2_loss(W1)
-                l2_loss += tf.nn.l2_loss(W2)
-                l2_loss += tf.nn.l2_loss(biases_rec)
+                # l2_loss += tf.nn.l2_loss(W1)
+                # l2_loss += tf.nn.l2_loss(W2)
+                # l2_loss += tf.nn.l2_loss(biases_rec)
 
-                self.scores = tf.nn.xw_plus_b(out_repr_drop, W, biases_out, name="scores")
+                self.scores = tf.nn.xw_plus_b(out_repr_drop, W_out, biases_out, name="scores")
                 self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
                 if is_binary:
