@@ -53,28 +53,39 @@ class TreeBased:
                                      window_algo, processing_algo,
                                      embedding_size, pretrained_embedding)
 
-        self.words = tf.placeholder(tf.int32, [None], "words")  # n
-        self.n_words = tf.placeholder(tf.int32, [], "n_words")  # n
+        self.window_algo = window_algo
+        self.processing_algo = processing_algo
+        self.exclude_leaves_loss = exclude_leaves_loss
+        self.is_binary = is_binary
+        self.is_weight_loss = is_weight_loss
+        self.l2_reg_lambda = l2_reg_lambda
 
-        self.left = tf.placeholder(tf.int32, [None], "left")  # n - 1
-        self.right = tf.placeholder(tf.int32, [None], "right")  # n - 1
-        self.labels = tf.placeholder(tf.int32, [None, num_classes], "labels")  # 2n-1x5
-        self.binary_ids = tf.placeholder(tf.int32, [None], "binary_ids")
-        self.weights_loss = tf.placeholder(tf.float32, [None], "weights_loss")
-        self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
+    def init_before_minibatch(self, w, nw, l, r, lb, bi, wl, d):
+        self.words, self.n_words, self.left, self.right, self.labels, self.binary_ids, self.weights_loss, self.dropout_keep_prob = \
+            w, nw, l, r, lb, bi, wl, d
+
+    def fn(self, i):
+        n_words = self.n_words[i]
+        lb_size = n_words - 1 if self.exclude_leaves_loss else 2 * n_words - 1
+        words = self.words[i][:n_words]
+        left = self.left[i][:n_words]
+        right = self.right[i][:n_words]
+        labels = self.labels[i][:lb_size]
+        #binary_ids = self.binary_ids[i][:n_words]
+        weights_loss = self.weights_loss[i][:lb_size]
 
         with tf.variable_scope("internal-state") as scope:
             scope.reuse_variables()
             with tf.name_scope("embedding"):
                 embedding_matrix = tf.get_variable("embedding")
-                embedded_vectors = tf.nn.embedding_lookup(embedding_matrix, self.words)
+                embedded_vectors = tf.nn.embedding_lookup(embedding_matrix, words)
 
             # Window here
-            windows_repr = window_algo.build_graph(embedded_vectors, self.n_words, self.dropout_keep_prob)
+            windows_repr = self.window_algo.build_graph(embedded_vectors, n_words, self.dropout_keep_prob)
 
             # Processing here
-            out_repr_unstripped = processing_algo.build_graph(windows_repr, self.left, self.right, self.n_words, self.dropout_keep_prob)
-            out_repr = out_repr_unstripped if not exclude_leaves_loss else out_repr_unstripped[self.n_words:]
+            out_repr_unstripped = self.processing_algo.build_graph(windows_repr, left, right, n_words, self.dropout_keep_prob)
+            out_repr = out_repr_unstripped if not self.exclude_leaves_loss else out_repr_unstripped[n_words:]
 
             # Calculate Mean cross-entropy loss
             with tf.name_scope("loss"):
@@ -85,50 +96,52 @@ class TreeBased:
                 biases_out = tf.get_variable("biases_out")
 
                 l2_loss += tf.nn.l2_loss(W_out) + tf.nn.l2_loss(biases_out)
-                l2_loss += window_algo.l2_loss()
-                l2_loss += processing_algo.l2_loss()
+                l2_loss += self.window_algo.l2_loss()
+                l2_loss += self.processing_algo.l2_loss()
 
-                self.scores = tf.nn.xw_plus_b(out_repr, W_out, biases_out, name="scores")
-                self.predictions = tf.argmax(self.scores, 1, name="predictions")
+                scores = tf.nn.xw_plus_b(out_repr, W_out, biases_out, name="scores")
+                predictions = tf.argmax(scores, 1, name="predictions")
 
-                if is_binary:
+                if self.is_binary:
                     losses = \
                         tf.nn.softmax_cross_entropy_with_logits(
-                            labels=tf.gather(self.labels, self.binary_ids),
-                            logits=tf.gather(self.scores, self.binary_ids),
+                            labels=tf.gather(labels, binary_ids),
+                            logits=tf.gather(scores, binary_ids),
                             name="losses")
                 else:
                     losses = \
                         tf.nn.softmax_cross_entropy_with_logits(
-                            labels=self.labels,
-                            logits=self.scores,
+                            labels=labels,
+                            logits=scores,
                             name="losses")
 
-                self.root_loss = \
+                root_loss = \
                     tf.nn.softmax_cross_entropy_with_logits(
-                        labels=self.labels[-1],
-                        logits=self.scores[-1],
+                        labels=labels[-1],
+                        logits=scores[-1],
                         name="root_loss")
 
-                if is_weight_loss:
-                    self.loss = tf.reduce_sum(tf.multiply(self.weights_loss, losses))
+                if self.is_weight_loss:
+                    loss = tf.reduce_sum(tf.multiply(weights_loss, losses))
                 else:
-                    self.loss = tf.reduce_mean(losses)
-                self.loss += l2_reg_lambda * l2_loss
+                    loss = tf.reduce_mean(losses)
+                loss += self.l2_reg_lambda * l2_loss
 
             # Accuracy
             with tf.name_scope("accuracy"):
-                if is_binary:
+                if self.is_binary:
                     correct_predictions = \
                         tf.equal(
-                            tf.gather(self.predictions, self.binary_ids),
-                            tf.argmax(tf.gather(self.labels, self.binary_ids), 1))
+                            tf.gather(predictions, binary_ids),
+                            tf.argmax(tf.gather(labels, binary_ids), 1))
                 else:
                     correct_predictions = \
-                        tf.equal(self.predictions, tf.argmax(self.labels, 1))
+                        tf.equal(predictions, tf.argmax(labels, 1))
 
-                self.root_accuracy = \
-                    tf.equal(self.predictions[-1],
-                             tf.argmax(self.labels[-1], axis=0),
-                             name="root_accuracy")
-                self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
+                root_accuracy = \
+                    tf.cast(tf.equal(predictions[-1],
+                             tf.argmax(labels[-1], axis=0),
+                             name="root_accuracy"),
+                    "float")
+                accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
+        return tf.stack([loss, root_loss, accuracy, root_accuracy])

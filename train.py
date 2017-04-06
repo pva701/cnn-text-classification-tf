@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 from tensorflow.contrib import learn
-
+import random
 import data_helpers
 from tree_based import TreeBased
 from flags.train_flags import FLAGS
@@ -13,6 +13,7 @@ from window import lstm_window, cnn_window, dummy_window
 from train_helpers import *
 import tree_simple
 import tree_lstm
+import minibatch
 
 print("\nParameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
@@ -157,17 +158,16 @@ with tf.Graph().as_default():
         global_step = tf.Variable(0, name="global_step", trainable=False)
 
         if FLAGS.optimizer == "Adagrad":
-            optimizer = tf.train.AdagradOptimizer(0.05)
+            optimizer_ = tf.train.AdagradOptimizer(0.05)
         elif FLAGS.optimizer == "Adam":
-            optimizer = tf.train.AdamOptimizer(0.001)
+            optimizer_ = tf.train.AdamOptimizer(0.001)
         else:
             raise Exception('Unknown optimizer')
         #AdaGrad
         #AdaDelta
         #reg_lam=0.0001
 
-        grads_and_vars = optimizer.compute_gradients(tree_nn.loss)
-        train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
+        optimizer = minibatch.MinibatchOptimizer(optimizer_, global_step, tree_nn, 5)
 
         train_summary_writer, dev_summary_writer, test_summary_writer = init_summary_writers(sess, out_dir)
 
@@ -175,8 +175,7 @@ with tf.Graph().as_default():
         # Initialize all variables
         sess.run(tf.global_variables_initializer())
 
-        np.random.seed(1)
-        TRAIN_MEAS_BATCH = 100
+        TRAIN_MEAS_BATCH = 4
         sum_train_loss = 0.0
         sum_train_root_loss = 0.0
         sum_train_acc = 0.0
@@ -189,10 +188,14 @@ with tf.Graph().as_default():
         dev_iter = 0
         test_iter = 0
 
+        batch_size = FLAGS.minibatch
+        random.seed(1)
         for epoch in range(FLAGS.num_epochs):
-            for sample_id in np.random.permutation(n):
-                lt, at, rlt, rat = train_sample(x_train[sample_id], tree_nn, vocab_dict, is_binary_task,
-                                                sess, train_op, global_step, FLAGS.dropout_keep_prob)
+            random.shuffle(x_train)
+            for batch_start in range(0, n, batch_size):
+                batch = x_train[batch_start:min(n, batch_start + batch_size)]
+
+                lt, at, rlt, rat = train_batch(batch, optimizer, vocab_dict, is_binary_task, sess, global_step, FLAGS.dropout_keep_prob)
                 sum_train_loss += lt
                 sum_train_acc += at
                 if rlt:
@@ -203,8 +206,10 @@ with tf.Graph().as_default():
                 current_step = tf.train.global_step(sess, global_step)
 
                 if current_step % TRAIN_MEAS_BATCH == 0:
-                    print("{} 100-batch: time {:g} sec, loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
+                    print("{} {}x{}-batch: time {:g} sec, loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(current_step // TRAIN_MEAS_BATCH,
+                                 TRAIN_MEAS_BATCH,
+                                 batch_size,
                                  time.time() - batch_time,
                                  sum_train_loss / TRAIN_MEAS_BATCH,
                                  sum_train_acc / TRAIN_MEAS_BATCH,
@@ -226,9 +231,7 @@ with tf.Graph().as_default():
 
                 if current_step % FLAGS.evaluate_every == 0:
                     dev_loss, dev_acc, dev_root_loss, dev_root_acc = \
-                        eval_dataset(x_dev, lambda ex: dev_sample(ex, tree_nn, vocab_dict, is_binary_task,
-                                                                  sess, global_step),
-                                     (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
+                        dev_batch(x_dev, optimizer, vocab_dict, is_binary_task, sess, global_step, (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
                     print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(dev_loss, dev_acc, dev_root_loss, dev_root_acc))
                     if dev_root_acc > max_dev:
@@ -240,9 +243,7 @@ with tf.Graph().as_default():
 
                 if current_step % FLAGS.test_evaluate_every == 0:
                     test_loss, test_acc, test_root_loss, test_root_acc = \
-                        eval_dataset(x_test, lambda ex: dev_sample(ex, tree_nn, vocab_dict, is_binary_task,
-                                                                   sess, global_step),
-                                     (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
+                        dev_batch(x_test, optimizer, vocab_dict, is_binary_task, sess, global_step, (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
                     print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(test_loss, test_acc, test_root_loss, test_root_acc))
                     if test_root_acc > max_test:
