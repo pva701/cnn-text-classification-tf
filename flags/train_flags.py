@@ -42,8 +42,8 @@ tf.flags.DEFINE_float("l2_reg_lambda", 0.0001,
 tf.flags.DEFINE_string("optimizer", "Adagrad", "Optimizer")
 tf.flags.DEFINE_integer("minibatch", 25, "Minibatch size")
 tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 200)")
-tf.flags.DEFINE_integer("evaluate_every", 80, "Evaluate model on dev set after this many steps")
-tf.flags.DEFINE_integer("test_evaluate_every", 80, "Evaluate model on test set after this many steps")
+tf.flags.DEFINE_integer("evaluate_every", 160, "Evaluate model on dev set after this many steps")
+tf.flags.DEFINE_integer("test_evaluate_every", 160, "Evaluate model on test set after this many steps")
 tf.flags.DEFINE_integer("checkpoint_every", 160, "Save model after this many steps")
 tf.flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store (default: 5)")
 
