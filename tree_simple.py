@@ -74,11 +74,13 @@ class TreeSimple:
         return self.recursive_size
 
     def l2_loss(self):
-        ret = tf.constant(0.0)
-        if self.recursive_size:
-            ret += tf.nn.l2_loss(tf.get_variable("W_t"))
-            ret += tf.nn.l2_loss(tf.get_variable("biases_t"))
-        ret += tf.nn.l2_loss(tf.get_variable("W1_rec"))
-        ret += tf.nn.l2_loss(tf.get_variable("W2_rec"))
-        ret += tf.nn.l2_loss(tf.get_variable("biases_rec"))
-        return ret
+        with tf.variable_scope("tree-simple") as scope:
+            scope.reuse_variables()
+            ret = tf.constant(0.0)
+            if self.recursive_size:
+                ret += tf.nn.l2_loss(tf.get_variable("W_t"))
+                ret += tf.nn.l2_loss(tf.get_variable("biases_t"))
+            ret += tf.nn.l2_loss(tf.get_variable("W1_rec"))
+            ret += tf.nn.l2_loss(tf.get_variable("W2_rec"))
+            ret += tf.nn.l2_loss(tf.get_variable("biases_rec"))
+            return ret
