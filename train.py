@@ -232,26 +232,23 @@ with tf.Graph().as_default():
                 if current_step % FLAGS.evaluate_every == 0:
                     dev_loss, dev_acc, dev_root_loss, dev_root_acc = \
                         dev_batch(x_dev, optimizer, vocab_dict, is_binary_task, sess, global_step, (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
-                    print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
-                          format(dev_loss, dev_acc, dev_root_loss, dev_root_acc))
-                    if dev_root_acc > max_dev:
-                        max_dev = dev_root_acc
-                        dev_iter = current_step // TRAIN_MEAS_BATCH
 
-                    print("Max dev evaluation root accuracy: {:g}, on batch = {}".format(max_dev, dev_iter))
-                    print("")
-
-                if current_step % FLAGS.test_evaluate_every == 0:
                     test_loss, test_acc, test_root_loss, test_root_acc = \
                         dev_batch(x_test, optimizer, vocab_dict, is_binary_task, sess, global_step, (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
+
+                    if dev_root_acc > max_dev:
+                        max_dev = dev_root_acc
+                        max_test = test_root_acc
+                        dev_iter = current_step // TRAIN_MEAS_BATCH
+
+                    print("Dev evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
+                          format(dev_loss, dev_acc, dev_root_loss, dev_root_acc))
+                    print("Max dev evaluation root accuracy: {:g} and test {:g}, on batch = {}".
+                          format(max_dev, max_test, dev_iter))
+                    print("")
+
                     print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(test_loss, test_acc, test_root_loss, test_root_acc))
-                    if test_root_acc > max_test:
-                        max_test = test_root_acc
-                        test_iter = current_step // TRAIN_MEAS_BATCH
-
-                    print("Max test evaluation root accuracy: {:g}, on batch = {}".format(max_test, test_iter))
-                    print("")
 
                 if current_step % FLAGS.checkpoint_every == 0:
                     path = saver.save(sess, checkpoint_prefix, global_step=current_step)
