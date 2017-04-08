@@ -24,6 +24,7 @@ class MinibatchOptimizer:
                 tf.range(tf.constant(0), self.batch_size),
                 dtype=tf.float32)
             , 0)
-
-        grads_and_vars = optimizer.compute_gradients(self.result[0])
-        self.train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
+        loss = self.result[0] + what.l2_loss()
+        grads_and_vars = optimizer.compute_gradients(loss)
+        self.train_op = optimizer.apply_gradients(grads_and_vars,
+                                                  global_step=global_step)

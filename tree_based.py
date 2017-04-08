@@ -89,15 +89,8 @@ class TreeBased:
 
             # Calculate Mean cross-entropy loss
             with tf.name_scope("loss"):
-                # Keeping track of l2 regularization loss (optional)
-                l2_loss = tf.constant(0.0)
-
                 W_out = tf.get_variable("W_out")
                 biases_out = tf.get_variable("biases_out")
-
-                l2_loss += tf.nn.l2_loss(W_out) + tf.nn.l2_loss(biases_out)
-                l2_loss += self.window_algo.l2_loss()
-                l2_loss += self.processing_algo.l2_loss()
 
                 scores = tf.nn.xw_plus_b(out_repr, W_out, biases_out, name="scores")
                 predictions = tf.argmax(scores, 1, name="predictions")
@@ -125,7 +118,6 @@ class TreeBased:
                     loss = tf.reduce_sum(tf.multiply(weights_loss, losses))
                 else:
                     loss = tf.reduce_sum(losses)
-                loss += self.l2_reg_lambda * l2_loss
 
             # Accuracy
             with tf.name_scope("accuracy"):
@@ -145,3 +137,18 @@ class TreeBased:
                     "float")
                 accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
         return tf.stack([loss, root_loss, accuracy, root_accuracy])
+
+    def l2_loss(self):
+        with tf.variable_scope("internal-state") as scope:
+            scope.reuse_variables()
+            W_out = tf.get_variable("W_out")
+            biases_out = tf.get_variable("biases_out")
+
+            with tf.name_scope("l2-reg"):
+                # Keeping track of l2 regularization loss (optional)
+                ret = tf.constant(0.0)
+                ret += tf.nn.l2_loss(W_out) + tf.nn.l2_loss(biases_out)
+                ret += self.window_algo.l2_loss()
+                ret += self.processing_algo.l2_loss()
+
+                return self.l2_reg_lambda * ret
