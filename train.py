@@ -16,9 +16,18 @@ import tree_simple
 import tree_lstm
 import minibatch
 
-print("\nParameters:")
+model_parameters = {"dataset_embedding_path",
+                    "exclude_leaves_loss",
+                    "window_algo",
+                    "processing_algo",
+                    "recursive_size",
+                    "minibatch",
+                    "l2_reg_lambda"}
+
+print("\nModel Parameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
-    print("{}={}".format(attr.upper(), value))
+    if attr in model_parameters:
+        print("{}={}".format(attr.upper(), value))
 print("")
 
 
