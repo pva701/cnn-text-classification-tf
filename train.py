@@ -253,10 +253,9 @@ with tf.Graph().as_default():
                           format(dev_loss, dev_acc, dev_root_loss, dev_root_acc))
                     print("Max dev evaluation root accuracy: {:g} and test {:g}, on batch = {}".
                           format(max_dev, max_test, dev_iter))
-                    print("")
-
                     print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(test_loss, test_acc, test_root_loss, test_root_acc))
+                    print("")
 
                 if current_step % FLAGS.checkpoint_every == 0:
                     path = saver.save(sess, checkpoint_prefix, global_step=current_step)
