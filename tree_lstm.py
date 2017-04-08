@@ -71,9 +71,10 @@ class TreeLstm:
                     o_gate = tf.sigmoid(self._gate("o", h_mat[li], h_mat[ri]))
                     u = tf.tanh(self._gate("u", h_mat[li], h_mat[ri]))
 
-                    c = tf.add(tf.multiply(i_gate, u),
-                               tf.add(tf.multiply(f_l_gate, c_mat[li]),
-                                      tf.multiply(f_r_gate, c_mat[ri])))
+                    c = tf.multiply(i_gate, u) + \
+                        tf.multiply(f_l_gate, c_mat[li]) + \
+                        tf.multiply(f_r_gate, c_mat[ri])
+
                     h = tf.multiply(o_gate, tf.tanh(c))
 
                     return tf.stack([tf.concat([h_mat, h], 0), tf.concat([c_mat, c], 0)])

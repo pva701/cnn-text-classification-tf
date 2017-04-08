@@ -124,7 +124,7 @@ class TreeBased:
                 if self.is_weight_loss:
                     loss = tf.reduce_sum(tf.multiply(weights_loss, losses))
                 else:
-                    loss = tf.reduce_mean(losses)
+                    loss = tf.reduce_sum(losses)
                 loss += self.l2_reg_lambda * l2_loss
 
             # Accuracy

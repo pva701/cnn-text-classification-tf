@@ -56,6 +56,7 @@ class TreeSimple:
             def apply_children(vectors, i):
                 lc = vectors[left[i]]
                 rc = vectors[right[i]]
+                # nn.tanh()
                 vector = tf.nn.sigmoid(tf.matmul(tf.expand_dims(lc, 0), W1) +
                                        tf.matmul(tf.expand_dims(rc, 0), W2) +
                                        biases_rec)
