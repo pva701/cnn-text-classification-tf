@@ -55,4 +55,11 @@ class CnnWindow:
         return self.num_filters_total
 
     def l2_loss(self):
-        return tf.constant(0.0)
+        ret = tf.constant(0.0)
+        with tf.variable_scope("cnn"):
+            for i, filter_size in enumerate(self.filter_sizes):
+                with tf.name_scope("conv-maxpool-{}".format(filter_size)):
+                    W = tf.get_variable("W_conv_{}".format(filter_size))
+                    b = tf.get_variable("b_conv_{}".format(filter_size))
+                    ret += tf.nn.l2_loss(W) + tf.nn.l2_loss(b)
+        return ret

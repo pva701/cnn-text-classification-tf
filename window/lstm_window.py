@@ -48,6 +48,11 @@ class LstmWindow:
     def output_vector_size(self):
         return self.out_size
 
-
     def l2_loss(self):
-        return tf.constant(0.0)
+        ret = tf.constant(0.0)
+        with tf.variable_scope("LSTM") as scope:
+            scope.reuse_variables()
+            for var in tf.trainable_variables():
+                if "LSTM/" in var.name:
+                    ret += tf.nn.l2_loss(var)
+        return ret

@@ -93,7 +93,7 @@ class TreeLstm:
         ret = tf.constant(0.0)
         with tf.variable_scope("tree-lstm") as scope:
             scope.reuse_variables()
-
-            for name in self._params_names:
-                ret += tf.nn.l2_loss(tf.get_variable(name))
+            for var in tf.trainable_variables():
+                if "tree-lstm/" in var.name:
+                    ret += tf.nn.l2_loss(var)
         return ret
