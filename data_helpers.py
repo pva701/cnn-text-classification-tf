@@ -110,7 +110,8 @@ def load_pickle_word_vecs_np(fname):
         #     word_vecs64[k] = v.astype(np.float64)
         # print(list(word_vecs64.items())[0][1].dtype)
 
-def add_unknown_words(word_vecs, vocab_dict, bound=0.25, k=300):
+
+def add_unknown_words(word_vecs, vocab_dict, bound=0.1, k=300):
     """
     For words that occur in at least min_df documents, create a separate word vector.
     0.25 is chosen so the unknown vectors have (approximately) same variance as pre-trained ones
@@ -118,3 +119,18 @@ def add_unknown_words(word_vecs, vocab_dict, bound=0.25, k=300):
     for word in vocab_dict:
         if word not in word_vecs:
             word_vecs[word] = np.random.uniform(-bound, bound, k)
+
+
+def load_glove_model(glove_file, vocab_dict):
+    f = open(glove_file, 'r')
+    word_vecs = {}
+    for line in f:
+        split_line = line.split()
+        word = split_line[0].lower()
+        vec = split_line[1:]
+        if len(vec) != 300:
+            continue
+        if word in vocab_dict:
+            word_vecs[word] = [float(val) for val in vec]
+    print("Done. ", len(word_vecs), " words loaded!")
+    return word_vecs

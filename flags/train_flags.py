@@ -6,11 +6,16 @@ import tensorflow as tf
 # ==================================================
 
 # Data loading params
-tf.flags.DEFINE_string("dataset_word2vec_path", "./data/stanford_sentiment_treebank/word2vec.pickle"
-                       , "Path to word2vec for current dataset")
-tf.flags.DEFINE_string("word2vec_path", "./data/word2vec/GoogleNews-vectors-negative300.bin"
-                       , "Path to word2vec")
-tf.flags.DEFINE_string("sst_path", "./data/stanford_sentiment_treebank",
+tf.flags.DEFINE_string("dataset_embedding_path",
+                       #"./data/stanford_sentiment_treebank/word2vec.pickle",
+                       "./data/stanford_sentiment_treebank/glove.pickle",
+                       "Path to word embedding for current dataset")
+tf.flags.DEFINE_string("embedding_path",
+                       #"./data/word2vec/GoogleNews-vectors-negative300.bin",
+                       "./data/glove/glove.840B.300d.txt",
+                       "Path to word embedding")
+tf.flags.DEFINE_string("sst_path",
+                       "./data/stanford_sentiment_treebank",
                        "Path to SST")
 
 # Model Hyperparameters
@@ -23,7 +28,7 @@ tf.flags.DEFINE_integer("embedding_dim", None,
 tf.flags.DEFINE_string("window_algo", "DUMMY", "Specify window algo: CNN|LSTM|DUMMY")
 tf.flags.DEFINE_string("processing_algo", "TREE-LSTM", "Specify processing algo: SIMPLE|TREE-LSTM")
 tf.flags.DEFINE_integer("mem_size", 150,
-                        "Size of memory and hidden state (TREE-LSTM")
+                        "Size of memory and hidden state (for TREE-LSTM")
 
 tf.flags.DEFINE_integer("recursive_size", None,
                         "Size of sentiment vectors (for SIMPLE processing algo)")

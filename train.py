@@ -1,10 +1,11 @@
 #! /usr/bin/env python3
 
 import time
+import random
 
 import numpy as np
 from tensorflow.contrib import learn
-import random
+
 import data_helpers
 from tree_based import TreeBased
 from flags.train_flags import FLAGS
@@ -67,24 +68,31 @@ vocab_size = len(vocab_dict)
 vocab_processor.save(os.path.join(out_dir, "vocab"))
 
 word2vec_matrix = None
-if FLAGS.embedding_dim is None:  # use pretrained
-    if not os.path.exists(FLAGS.dataset_word2vec_path):  # if no word2vec for current dataset
-        print("Loading word2vec...")
-        word2vec = data_helpers.load_word2vec(FLAGS.word2vec_path, vocab_dict)
-        print("Loading word2vec finished")
+if FLAGS.embedding_dim is None:  # use pre-trained
 
-        data_helpers.dump_pickle_word_vecs_np(FLAGS.dataset_word2vec_path, word2vec)
+    if not os.path.exists(FLAGS.dataset_embedding_path):  # if no word2vec for current dataset
+        if "wor2vec" in FLAGS.embedding_path:
+            print("Loading word2vec...")
+            embedding = data_helpers.load_word2vec(FLAGS.embedding_path, vocab_dict)
+            print("Loading word2vec finished")
+        else:
+            print("Loading GLoVe...")
+            embedding = data_helpers.load_glove_model(FLAGS.embedding_path, vocab_dict)
+            print("Loading GLoVe finished")
+
+        data_helpers.dump_pickle_word_vecs_np(FLAGS.dataset_embedding_path, embedding)
     else:
-        print("Loading word2vec for dataset...")
-        word2vec = data_helpers.load_pickle_word_vecs_np(FLAGS.dataset_word2vec_path)
-        print("Word2Vec words:", len(word2vec))
-        print("Wrod2Vec dim:", len(list(word2vec.items())[0][1]))
+        print("Loading embedding for dataset...")
+        embedding = data_helpers.load_pickle_word_vecs_np(FLAGS.dataset_embedding_path)
+        print("Embedding words:", len(embedding))
+        print("Embedding dim:", len(list(embedding.items())[0][1]))
 
-    data_helpers.add_unknown_words(word2vec, vocab_dict)
+    data_helpers.add_unknown_words(embedding, vocab_dict)
     list_vecs = [None] * vocab_size
     for word, idx in vocab_dict.items():
-        list_vecs[idx] = word2vec[word]
+        list_vecs[idx] = embedding[word]
     word2vec_matrix = np.array(list_vecs)
+
 print("Vocabulary Size: {:d}".format(vocab_size))
 print("Train/Dev/Test split: {:d}/{:d}/{:d}".
       format(len(x_train), len(x_dev), len(x_test)))
