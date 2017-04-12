@@ -172,10 +172,12 @@ def eval_dataset(x_dataset, evaluator, summary=None):
 def add_summary(sum_loss, sum_acc, sum_root_loss, sum_root_acc, summary):
     writer = summary[0]
     step = summary[1]
-    summary_loss = tf.Summary(value=[tf.Summary.Value(tag="loss", simple_value=sum_loss), ])
-    summary_acc = tf.Summary(value=[tf.Summary.Value(tag="accuracy", simple_value=sum_acc), ])
-    summary_root_loss = tf.Summary(value=[tf.Summary.Value(tag="root_loss", simple_value=sum_root_loss), ])
-    summary_root_acc = tf.Summary(value=[tf.Summary.Value(tag="root_accuracy", simple_value=sum_root_acc), ])
+    summary_loss = tf.Summary(value=[tf.Summary.Value(tag="loss", simple_value=sum_loss.astype(float)), ])
+    summary_acc = tf.Summary(value=[tf.Summary.Value(tag="accuracy", simple_value=sum_acc.astype(float)), ])
+    summary_root_loss = tf.Summary(
+        value=[tf.Summary.Value(tag="root_loss", simple_value=sum_root_loss.astype(float)), ])
+    summary_root_acc = tf.Summary(
+        value=[tf.Summary.Value(tag="root_accuracy", simple_value=sum_root_acc.astype(float)), ])
     writer.add_summary(summary_loss, step)
     writer.add_summary(summary_acc, step)
     writer.add_summary(summary_root_loss, step)

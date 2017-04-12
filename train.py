@@ -1,4 +1,6 @@
 #! /usr/bin/env python3
+import sys
+#sys.path.append('/nfs/home/iperesadin/github/text-classification-tf')
 
 import time
 import random
@@ -151,7 +153,7 @@ with tf.Graph().as_default():
             raise Exception('Unknown window algo')
 
         if FLAGS.processing_algo == "SIMPLE":
-            processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size, subtree_lstm.SubtreeLstm(300))
+            processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size, subtree_lstm.SubtreeLstm())
         elif FLAGS.processing_algo == "TREE-LSTM":
             processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size)
         else:
