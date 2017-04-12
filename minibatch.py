@@ -10,13 +10,18 @@ class MinibatchOptimizer:
 
         self.left = tf.placeholder(tf.int32, [None, None], "left")  # n - 1
         self.right = tf.placeholder(tf.int32, [None, None], "right")  # n - 1
+        self.l_bound = tf.placeholder(tf.int32, [None, None], "l_bound")  # n - 1
+        self.r_bound = tf.placeholder(tf.int32, [None, None], "r_bound")  # n - 1
+
         self.labels = tf.placeholder(tf.int32, [None, None, num_classes], "labels")  # 2n-1x5
         # self.binary_ids = tf.placeholder(tf.int32, [None, None], "binary_ids")
         self.weights_loss = tf.placeholder(tf.float32, [None, None], "weights_loss")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
-        what.init_before_minibatch(self.words, self.n_words, self.left, self.right, self.labels, None,
-                                   self.weights_loss, self.dropout_keep_prob)
+        what. \
+            init_before_minibatch(
+            self.words, self.n_words, self.left, self.right, self.l_bound, self.r_bound,
+            self.labels, None, self.weights_loss, self.dropout_keep_prob)
 
         self.result = tf.reduce_mean(
             tf.map_fn(

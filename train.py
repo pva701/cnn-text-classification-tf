@@ -12,8 +12,7 @@ from flags.train_flags import FLAGS
 import pytreebank
 from window import lstm_window, cnn_window, dummy_window
 from train_helpers import *
-import tree_simple
-import tree_lstm
+from processing import tree_lstm, tree_simple, subtree_lstm
 import minibatch
 
 model_parameters = {"dataset_embedding_path",
@@ -38,7 +37,6 @@ print("")
 timestamp = str(int(time.time()))
 out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
 print("Writing to {}\n".format(out_dir))
-
 
 
 # Checkpoint directory. Tensorflow assumes this directory already exists so we need to create it
@@ -153,7 +151,7 @@ with tf.Graph().as_default():
             raise Exception('Unknown window algo')
 
         if FLAGS.processing_algo == "SIMPLE":
-            processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size)
+            processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size, subtree_lstm.SubtreeLstm(300))
         elif FLAGS.processing_algo == "TREE-LSTM":
             processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size)
         else:

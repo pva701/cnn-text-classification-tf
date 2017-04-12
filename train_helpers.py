@@ -10,11 +10,14 @@ def create_batch_placeholder(batch, vocab_dict):
     left = []
     right = []
     labels = []
+    l_bound = []
+    r_bound = []
     weights = []
     max_len = 0
     max_lab = 0
     for tree in batch:
-        x, left_x, right_x, labels_x, weights_x, _ = tree.to_sample(vocab_dict)
+        x, left_x, right_x, l_bound_x, r_bound_x, \
+        labels_x, weights_x, _ = tree.to_sample(vocab_dict)
         max_len = max(max_len, len(x))
         max_lab = max(max_lab, len(labels_x))
 
@@ -22,6 +25,7 @@ def create_batch_placeholder(batch, vocab_dict):
         words.append(x)
         left.append(left_x)
         right.append(right_x)
+        l_bound.append(l_bound_x), r_bound.append(r_bound_x)
         labels.append(labels_x)
         weights.append(weights_x)
 
@@ -34,9 +38,11 @@ def create_batch_placeholder(batch, vocab_dict):
     words = [populate(max_len, e) for e in words]
     left = [populate(max_len, e) for e in left]
     right = [populate(max_len, e) for e in right]
+    l_bound = [populate(max_len, e) for e in l_bound]
+    r_bound = [populate(max_len, e) for e in r_bound]
     labels = [populate(max_lab, e, labels[0][0]) for e in labels]
     weights = [populate(max_lab, e) for e in weights]
-    return n_words, words, left, right, labels, weights
+    return n_words, words, left, right, l_bound, r_bound, labels, weights
 
 
 def train_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, dropout_k):
@@ -50,13 +56,15 @@ def train_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, drop
     #     root_valid = True
 
     root_valid = True
-    n_words, words, left, right, labels, weights = create_batch_placeholder(batch, vocab_dict)
+    n_words, words, left, right, l_bound, r_bound, labels, weights = create_batch_placeholder(batch, vocab_dict)
     feed_dict = {
         optimizer.batch_size: len(batch),
         optimizer.words: words,
         optimizer.n_words: n_words,
         optimizer.left: left,
         optimizer.right: right,
+        optimizer.l_bound: l_bound,
+        optimizer.r_bound: r_bound,
         optimizer.labels: labels,
         # optimizer.binary_ids: binary_ids,
         optimizer.weights_loss: weights,
@@ -87,7 +95,7 @@ def dev_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, summar
     #     root_valid = True
 
     root_valid = True
-    n_words, words, left, right, labels, weights = create_batch_placeholder(batch, vocab_dict)
+    n_words, words, left, right, l_bound, r_bound, labels, weights = create_batch_placeholder(batch, vocab_dict)
 
     feed_dict = {
         optimizer.batch_size: len(batch),
@@ -95,6 +103,8 @@ def dev_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, summar
         optimizer.n_words: n_words,
         optimizer.left: left,
         optimizer.right: right,
+        optimizer.l_bound: l_bound,
+        optimizer.r_bound: r_bound,
         optimizer.labels: labels,
         # optimizer.binary_ids: binary_ids,
         optimizer.weights_loss: weights,

@@ -60,9 +60,10 @@ class TreeBased:
         self.is_weight_loss = is_weight_loss
         self.l2_reg_lambda = l2_reg_lambda
 
-    def init_before_minibatch(self, w, nw, l, r, lb, bi, wl, d):
-        self.words, self.n_words, self.left, self.right, self.labels, self.binary_ids, self.weights_loss, self.dropout_keep_prob = \
-            w, nw, l, r, lb, bi, wl, d
+    def init_before_minibatch(self, w, nw, l, r, lbound, rbound, lb, bi, wl, d):
+        self.words, self.n_words, self.left, self.right, self.l_bound, self.r_bound,\
+        self.labels, self.binary_ids, self.weights_loss, self.dropout_keep_prob = \
+            w, nw, l, r, lbound, rbound, lb, bi, wl, d
 
     def fn(self, i):
         n_words = self.n_words[i]
@@ -70,7 +71,9 @@ class TreeBased:
         words = self.words[i][:n_words]
         left = self.left[i][:n_words]
         right = self.right[i][:n_words]
+        l_bound, r_bound = self.l_bound[i], self.r_bound[i]
         labels = self.labels[i][:lb_size]
+        binary_ids = None
         #binary_ids = self.binary_ids[i][:n_words]
         weights_loss = self.weights_loss[i][:lb_size]
 
@@ -84,7 +87,8 @@ class TreeBased:
             windows_repr = self.window_algo.build_graph(embedded_vectors, n_words, self.dropout_keep_prob)
 
             # Processing here
-            out_repr_unstripped = self.processing_algo.build_graph(windows_repr, left, right, n_words, self.dropout_keep_prob)
+            out_repr_unstripped = \
+                self.processing_algo.build_graph(windows_repr, left, right, l_bound, r_bound, n_words, self.dropout_keep_prob)
             out_repr = out_repr_unstripped if not self.exclude_leaves_loss else out_repr_unstripped[n_words:]
 
             # Calculate Mean cross-entropy loss

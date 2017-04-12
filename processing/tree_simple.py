@@ -6,7 +6,7 @@ import tensorflow as tf
 class TreeSimple:
     def init_with_scope(self, in_size):
         self.in_size = in_size
-        with tf.variable_scope("tree-simple"):
+        with tf.variable_scope("tree-simple") as scope:
             if not self.recursive_size:
                 recursive_size = in_size
             else:
@@ -34,20 +34,22 @@ class TreeSimple:
                 "biases_rec",
                 [recursive_size],
                 initializer=tf.zeros_initializer())
+            self.subtree_fun.init_with_scope(self.output_vector_size())
 
-    def __init__(self, recursive_size):
+    def __init__(self, recursive_size, subtree_fun=None):
         self.recursive_size = recursive_size
+        self.subtree_fun = subtree_fun
 
-    def build_graph(self, inputs, left, right, n_words, dropout_keep_prob):
+    def build_graph(self, words, left, right, l_bound, r_bound, n_words, dropout_keep_prob):
         with tf.variable_scope("tree-simple") as scope:
             scope.reuse_variables()
 
             if self.recursive_size:
                 W_t = tf.get_variable("W_t")
                 biases_t = tf.get_variable("biases_t")
-                leaves_vectors = tf.nn.sigmoid(tf.matmul(inputs, W_t) + biases_t)
+                leaves_vectors = tf.nn.sigmoid(tf.matmul(words, W_t) + biases_t)
             else:
-                leaves_vectors = inputs
+                leaves_vectors = words
 
             W1 = tf.get_variable("W1_rec")
             W2 = tf.get_variable("W2_rec")
@@ -60,6 +62,10 @@ class TreeSimple:
                 vector = tf.nn.sigmoid(tf.matmul(tf.expand_dims(lc, 0), W1) +
                                        tf.matmul(tf.expand_dims(rc, 0), W2) +
                                        biases_rec)
+                if self.subtree_fun:
+                    l_b = l_bound[i]
+                    r_b = r_bound[i]
+                    vector = self.subtree_fun.fn(vector, words[l_b:r_b], r_b - l_b, dropout_keep_prob)
                 return tf.concat([vectors, vector], 0)
 
             ret = tf.foldl(apply_children,
@@ -70,6 +76,9 @@ class TreeSimple:
                 return tf.nn.dropout(ret, dropout_keep_prob)
 
     def output_vector_size(self):
+        if self.subtree_fun:
+            return self.subtree_fun.output_vector_size()
+
         if not self.recursive_size:
             return self.in_size
         return self.recursive_size

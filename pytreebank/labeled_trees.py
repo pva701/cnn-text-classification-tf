@@ -144,6 +144,8 @@ class LabeledTree(object):
         words_id = [None]*n
         left = []
         right = []
+        l_bound = []
+        r_bound = []
         labels = [None] * (2 * n - 1)
         binary_ids = []
         weights = [None] * (2 * n - 1)
@@ -180,6 +182,15 @@ class LabeledTree(object):
                 assert len(node.children) == 2
                 l_n = rec(node.children[0])
                 r_n = rec(node.children[1])
+                if l_n < n:
+                    l_bound.append(l_n)
+                else:
+                    l_bound.append(l_bound[l_n - n])
+                if r_n < n:
+                    r_bound.append(r_n)
+                else:
+                    r_bound.append(r_bound[r_n - n])
+
                 left.append(l_n)
                 right.append(r_n)
 
@@ -219,7 +230,7 @@ class LabeledTree(object):
         else:
             weights = []
 
-        self.sample = (words_id, left, right, labels, weights, binary_ids)
+        self.sample = (words_id, left, right, l_bound, r_bound, labels, weights, binary_ids)
         return self.sample
 
     def __str__(self):

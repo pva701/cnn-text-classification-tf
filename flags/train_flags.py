@@ -7,8 +7,8 @@ import tensorflow as tf
 
 # Data loading params
 tf.flags.DEFINE_string("dataset_embedding_path",
-                       #"./data/stanford_sentiment_treebank/word2vec.pickle",
-                       "./data/stanford_sentiment_treebank/glove.pickle",
+                       "./data/stanford_sentiment_treebank/word2vec.pickle",
+                       #"./data/stanford_sentiment_treebank/glove.pickle",
                        "Path to word embedding for current dataset")
 tf.flags.DEFINE_string("embedding_path",
                        #"./data/word2vec/GoogleNews-vectors-negative300.bin",
@@ -26,7 +26,7 @@ tf.flags.DEFINE_boolean("weight_loss", False, "Weight loss (depends on length su
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
 tf.flags.DEFINE_string("window_algo", "DUMMY", "Specify window algo: CNN|LSTM|DUMMY")
-tf.flags.DEFINE_string("processing_algo", "TREE-LSTM", "Specify processing algo: SIMPLE|TREE-LSTM")
+tf.flags.DEFINE_string("processing_algo", "SIMPLE", "Specify processing algo: SIMPLE|TREE-LSTM")
 tf.flags.DEFINE_integer("mem_size", 150,
                         "Size of memory and hidden state (for TREE-LSTM")
 
