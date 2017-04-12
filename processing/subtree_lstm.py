@@ -28,10 +28,10 @@ class SubtreeLstm:
                 return tf.stack([c, h])
             ret = tf.foldl(apply_children,
                            tf.range(tf.constant(0), sub_n_words),
-                           initializer=(tf.zeros([1, self.hidden_size]), init_state))
+                           initializer=(tf.zeros([1, self.hidden_size]), tf.expand_dims(init_state, 0)))
             # Add dropout
             with tf.name_scope("dropout"):
-                return tf.nn.dropout(ret[1], dropout_keep_prob)
+                return tf.reshape(tf.nn.dropout(ret[1], dropout_keep_prob), [-1])
 
     def output_vector_size(self):
         return self.hidden_size
