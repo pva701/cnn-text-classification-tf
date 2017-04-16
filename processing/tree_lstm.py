@@ -4,9 +4,10 @@ import tensorflow as tf
 
 
 class TreeLstm:
-    def __init__(self, mem_size):
+    def __init__(self, mem_size, subtree_fun=None):
         self._params_names = []
         self.mem_size = mem_size
+        self.subtree_fun = subtree_fun
 
     def _create_linear(self, name, in_size, out_size):
         self._params_names.append("W_" + name)
@@ -35,6 +36,7 @@ class TreeLstm:
 
                 self._create_linear("u_l", mem_size, mem_size)
                 self._create_linear("u_r", mem_size, mem_size)
+            self.subtree_fun.init_with_scope(mem_size, in_size)
 
     def _gate(self, name, lh, rh):
         W_l = tf.get_variable("W_" + name + "_l")
@@ -45,7 +47,7 @@ class TreeLstm:
         return tf.matmul(tf.expand_dims(lh, 0), W_l) + b_l + \
                tf.matmul(tf.expand_dims(rh, 0), W_r) + b_r
 
-    def build_graph(self, inputs, left, right, n_words, dropout_keep_prob):
+    def build_graph(self, words_vecs, left, right, l_bound, r_bound, n_words, dropout_keep_prob):
         with tf.variable_scope("tree-lstm") as scope:
             scope.reuse_variables()
 
@@ -55,8 +57,8 @@ class TreeLstm:
                 W_leaf_o = tf.get_variable("W_leaf_o")
                 b_leaf_o = tf.get_variable("b_leaf_o")
 
-                c_leaf = tf.matmul(inputs, W_leaf_c) + b_leaf_c
-                o_leaf = tf.sigmoid(tf.matmul(inputs, W_leaf_o) + b_leaf_o)
+                c_leaf = tf.matmul(words_vecs, W_leaf_c) + b_leaf_c
+                o_leaf = tf.sigmoid(tf.matmul(words_vecs, W_leaf_o) + b_leaf_o)
                 h_leaf = tf.multiply(o_leaf, tf.tanh(c_leaf))
 
             with tf.name_scope("inner"):
@@ -79,12 +81,27 @@ class TreeLstm:
 
                     return tf.stack([tf.concat([h_mat, h], 0), tf.concat([c_mat, c], 0)])
 
-                ret = tf.foldl(compute_hidden_and_memory,
+                raw_vectors = tf.foldl(compute_hidden_and_memory,
                                tf.range(tf.constant(0), n_words - 1),
                                initializer=(h_leaf, c_leaf))[0]
+
+                if self.subtree_fun:
+                    def apply_subtree_fun(i):
+                        vector = raw_vectors[i + n_words]
+                        l_b = l_bound[i]
+                        r_b = r_bound[i]
+                        return self.subtree_fun.fn(vector, words_vecs[l_b:r_b], r_b - l_b, dropout_keep_prob)
+                    inner_vectors = tf.map_fn(
+                        apply_subtree_fun,
+                        tf.range(tf.constant(0), n_words - 1),
+                        dtype=tf.float32)
+                    ret_vectors = tf.concat([raw_vectors[:n_words], inner_vectors], 0)
+                else:
+                    ret_vectors = raw_vectors
+
                 # Add dropout
                 with tf.name_scope("dropout"):
-                    return tf.nn.dropout(ret, dropout_keep_prob)
+                    return tf.nn.dropout(ret_vectors, dropout_keep_prob)
 
     def output_vector_size(self):
         return self.mem_size

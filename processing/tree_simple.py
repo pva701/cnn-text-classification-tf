@@ -68,13 +68,14 @@ class TreeSimple:
                            tf.range(tf.constant(0), n_words - 1),
                            initializer=leaves_vectors)
 
-            def apply_subtree_fun(i):
-                vector = raw_vectors[i + n_words]
-                l_b = l_bound[i]
-                r_b = r_bound[i]
-                return self.subtree_fun.fn(vector, words_vecs[l_b:r_b], r_b - l_b, dropout_keep_prob)
-
             if self.subtree_fun:
+                def apply_subtree_fun(i):
+                    vector = raw_vectors[i + n_words]
+                    l_b = l_bound[i]
+                    r_b = r_bound[i]
+                    return self.subtree_fun.fn(vector, words_vecs[l_b:r_b], r_b - l_b, dropout_keep_prob)
+
+
                 inner_vectors = tf.map_fn(
                     apply_subtree_fun,
                     tf.range(tf.constant(0), n_words - 1),

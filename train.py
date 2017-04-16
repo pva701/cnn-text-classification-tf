@@ -155,7 +155,7 @@ with tf.Graph().as_default():
         if FLAGS.processing_algo == "SIMPLE":
             processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size, subtree_lstm.SubtreeLstm())
         elif FLAGS.processing_algo == "TREE-LSTM":
-            processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size)
+            processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size, subtree_lstm.SubtreeLstm())
         else:
             raise Exception('Unknown processing algo')
 
