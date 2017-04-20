@@ -12,21 +12,22 @@ class SubtreeLstm:
             self.cell = rnn.BasicLSTMCell(self.hidden_size)
             self.initial_state = self.cell.zero_state(1, tf.float32)
             state = self.initial_state
-            self.cell(tf.zeros([1, in_size]), state, scope)
+            self.cell(tf.zeros([1, in_size + hidden_size]), state, scope)
 
     def fn(self, init_state, word_vecs, sub_n_words, dropout_keep_prob):
         with tf.variable_scope("subtree-lstm") as scope:
             scope.reuse_variables()
 
             def apply_children(state, i):
-                _, new_state = self.cell(tf.expand_dims(word_vecs[i], 0),
+                _, new_state = self.cell(tf.expand_dims(tf.concat([init_state, word_vecs[i]], axis=0), 0),
                                          rnn.LSTMStateTuple(state[0], state[1]),
                                          scope)
                 c, h = new_state
                 return tf.stack([c, h])
             ret = tf.foldl(apply_children,
                            tf.range(tf.constant(0), sub_n_words),
-                           initializer=(tf.expand_dims(init_state, 0), tf.zeros([1, self.hidden_size]))) #memory
+                           initializer=(tf.zeros([1, self.hidden_size]), tf.zeros([1, self.hidden_size]))) #memory
+                           #initializer=(tf.expand_dims(init_state, 0), tf.zeros([1, self.hidden_size]))) #memory
                            #initializer=(tf.zeros([1, self.hidden_size]), tf.expand_dims(init_state, 0))) #hidden
             return tf.reshape(ret[1], [-1])
             # Add dropout
