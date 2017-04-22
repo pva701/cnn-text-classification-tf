@@ -21,12 +21,11 @@ tf.flags.DEFINE_string("sst_path",
 # Model Hyperparameters
 tf.flags.DEFINE_boolean("is_binary", False, "Binary classification or fine-grained")
 tf.flags.DEFINE_boolean("exclude_leaves_loss", False, "Exclude leaves loss from minimization")
-tf.flags.DEFINE_boolean("weight_loss", False, "Weight loss (depends on length subtree)")
 
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
 tf.flags.DEFINE_string("window_algo", "CNN", "Specify window algo: CNN|LSTM|DUMMY")
-tf.flags.DEFINE_string("processing_algo", "TREE-LSTM", "Specify processing algo: SIMPLE|TREE-LSTM")
+tf.flags.DEFINE_string("processing_algo", "TOP-K", "Specify processing algo: SIMPLE|TREE-LSTM")
 tf.flags.DEFINE_integer("mem_size", 150,
                         "Size of memory and hidden state (for TREE-LSTM")
 

@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-import sys
 #sys.path.append('/nfs/home/iperesadin/github/text-classification-tf')
 
 import time
@@ -14,7 +13,8 @@ from flags.train_flags import FLAGS
 import pytreebank
 from window import lstm_window, cnn_window, dummy_window
 from train_helpers import *
-from processing import tree_lstm, tree_simple, subtree_lstm
+from processing import tree_lstm, tree_simple, subtree_top_k
+from outer import subtree_lstm
 import minibatch
 
 model_parameters = {"dataset_embedding_path",
@@ -109,7 +109,7 @@ print("Train/Dev/Test split: {:d}/{:d}/{:d}".
 def apply_hyperparameters(x_data):
     x_ret = []
     for x in x_data:
-        x.set_hyperparameters(is_binary_task, FLAGS.exclude_leaves_loss, FLAGS.weight_loss)
+        x.set_hyperparameters(is_binary_task, FLAGS.exclude_leaves_loss)
         res = x.to_sample(vocab_dict)
 
         if is_binary_task:
@@ -156,6 +156,8 @@ with tf.Graph().as_default():
             processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size, subtree_lstm.SubtreeLstm())
         elif FLAGS.processing_algo == "TREE-LSTM":
             processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size, subtree_lstm.SubtreeLstm())
+        elif FLAGS.processing_algo == "TOP-K":
+            processing_algo = subtree_top_k.SubtreeTopK(4, 128, 'SUM')
         else:
             raise Exception('Unknown processing algo')
 
@@ -165,7 +167,7 @@ with tf.Graph().as_default():
             window_algo=window_algo,
             processing_algo=processing_algo,
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
-            is_weight_loss=FLAGS.weight_loss,
+            #top_k_algo=
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
             l2_reg_lambda=FLAGS.l2_reg_lambda)

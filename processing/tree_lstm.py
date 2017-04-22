@@ -47,7 +47,13 @@ class TreeLstm:
         return tf.matmul(tf.expand_dims(lh, 0), W_l) + b_l + \
                tf.matmul(tf.expand_dims(rh, 0), W_r) + b_r
 
-    def build_graph(self, words_vecs, left, right, l_bound, r_bound, n_words, dropout_keep_prob):
+    def build_graph(self,
+                    n_words,
+                    words_vecs,
+                    left, right,
+                    l_bound, r_bound,
+                    _1, _2, _3,
+                    dropout_keep_prob):
         with tf.variable_scope("tree-lstm") as scope:
             scope.reuse_variables()
 

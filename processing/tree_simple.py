@@ -40,13 +40,20 @@ class TreeSimple:
         self.recursive_size = recursive_size
         self.subtree_fun = subtree_fun
 
-    def build_graph(self, words_vecs, left, right, l_bound, r_bound, n_words, dropout_keep_prob):
+    def build_graph(self,
+                    n_words,
+                    words_vecs,
+                    left, right,
+                    l_bound, r_bound,
+                    _1, _2, _3,
+                    dropout_keep_prob):
         with tf.variable_scope("tree-simple") as scope:
             scope.reuse_variables()
 
             if self.recursive_size:
                 W_t = tf.get_variable("W_t")
                 biases_t = tf.get_variable("biases_t")
+                # nn.tanh()
                 leaves_vectors = tf.nn.sigmoid(tf.matmul(words_vecs, W_t) + biases_t)
             else:
                 leaves_vectors = words_vecs

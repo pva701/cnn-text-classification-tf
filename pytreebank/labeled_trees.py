@@ -16,6 +16,20 @@ except Exception:
         return max(4, int(len(text) * 1.1))
 
 
+class SampleDescriptor:
+    def __init__(self, words_id, left, right,
+                       l_bound, r_bound, labels,
+                       euler, euler_l, euler_r, binary_ids):
+        self.words = words_id
+        self.left = left
+        self.right = right
+        self.l_bound = l_bound
+        self.r_bound = r_bound
+        self.labels = labels
+        self.euler = euler
+        self.euler_l = euler_l
+        self.euler_r = euler_r
+
 class LabeledTree(object):
     SCORE_MAPPING = [-12.5, -6.25, 0.0, 6.25, 12.5]
 
@@ -38,12 +52,10 @@ class LabeledTree(object):
         self.sample = None
         self.is_binary_task = False
         self.exclude_leaves_loss = False
-        self.is_weights = True
 
-    def set_hyperparameters(self, bin_task, exl_leaves, is_weights):
+    def set_hyperparameters(self, bin_task, exl_leaves):
         self.is_binary_task = bin_task
         self.exclude_leaves_loss = exl_leaves
-        self.is_weights = is_weights
 
     def uproot(tree):
         """
@@ -136,52 +148,62 @@ class LabeledTree(object):
         words = self.to_words()
         return " ".join(words)
 
+    def __create_labels(self, node, binary_ids):
+        if self.is_binary_task:
+            l = [0, 0]
+            if node.label < 2:
+                l[0] = 1
+            elif node.label > 2:
+                l[1] = 1
+            if node.label != 2:
+               binary_ids.append(self.vert_num)
+        else:
+            l = [0] * 5
+            l[node.label] = 1
+        return l
+
     def to_sample(self, vocab):
         if self.sample:
             return self.sample
 
         n = len(self.to_words())
-        words_id = [None]*n
+        words_id = [None] * n
         left = []
         right = []
         l_bound = []
         r_bound = []
         labels = [None] * (2 * n - 1)
+        euler = []
+        euler_l = [None] * (n - 1)
+        euler_r = [None] * (n - 1)
         binary_ids = []
-        weights = [None] * (2 * n - 1)
+
         self.list_num = 0
         self.vert_num = n
 
-        def rec(node):
+        def collect_info(node):
             if len(node.children) == 0:
                 if node.text in vocab:
                     words_id[self.list_num] = vocab[node.text]
                 else:
                     words_id[self.list_num] = 0
 
-                node.subsent_len = 1
-
                 if not self.exclude_leaves_loss:
-                    if self.is_binary_task:
-                        l = [0, 0]
-                        if node.label < 2:
-                            l[0] = 1
-                        elif node.label > 2:
-                            l[1] = 1
-                        if node.label != 2:
-                           binary_ids.append(self.list_num)
-                    else:
-                        l = [0] * 5
-                        l[node.label] = 1
-                    labels[self.list_num] = l
-                weights[self.list_num] = 1
+                    labels[self.list_num] = self.__create_labels(node, binary_ids)
+
+                euler.append(self.list_num)
 
                 self.list_num += 1
                 return self.list_num - 1
             else:
                 assert len(node.children) == 2
-                l_n = rec(node.children[0])
-                r_n = rec(node.children[1])
+                sv_l = len(euler)
+                l_n = collect_info(node.children[0])
+                r_n = collect_info(node.children[1])
+                euler.append(self.vert_num)
+                euler_l[self.vert_num - n] = sv_l
+                euler_r[self.vert_num - n] = len(euler)
+
                 if l_n < n:
                     l_bound.append(l_n)
                 else:
@@ -194,43 +216,23 @@ class LabeledTree(object):
                 left.append(l_n)
                 right.append(r_n)
 
-                node.subsent_len = node.children[0].subsent_len + \
-                                   node.children[1].subsent_len
-
-                if self.is_binary_task:
-                    l = [0, 0]
-                    if node.label < 2:
-                        l[0] = 1
-                    elif node.label > 2:
-                        l[1] = 1
-                    if node.label != 2:
-                       binary_ids.append(self.vert_num)
-                else:
-                    l = [0]*5
-                    l[node.label] = 1
-                labels[self.vert_num] = l
-                weights[self.vert_num] = node.subsent_len
+                labels[self.vert_num] = self.__create_labels(node, binary_ids)
 
                 self.vert_num += 1
                 return self.vert_num - 1
 
-        rec(self)
+        collect_info(self)
         assert self.list_num == n
         assert self.vert_num == 2 * n - 1
         assert len(left) == len(right) and len(left) + 1 == len(words_id)
 
         if self.exclude_leaves_loss:
             labels = labels[n:]
-            weights = weights[n:]
-
-        if self.is_weights:
-            sm = sum(weights)
-            for i in range(len(weights)):
-                weights[i] = weights[i] * 1.0 / sm
-        else:
-            weights = []
-
-        self.sample = (words_id, left, right, l_bound, r_bound, labels, weights, binary_ids)
+        self.sample = \
+            SampleDescriptor(words_id, left, right,
+                             l_bound, r_bound, labels,
+                             euler, euler_l, euler_r,
+                             binary_ids)
         return self.sample
 
     def __str__(self):
