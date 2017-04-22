@@ -52,7 +52,7 @@ class SubtreeTopK:
             if self.backend == 'SUM':
                 W_sum = tf.get_variable("W_sum")
                 biases_sum = tf.get_variable("biases_sum")
-                return tf.reshape(FUN_ACT(tf.nn.xw_plus_b(tf.transpose(res_vecs), W_sum, biases_sum)), [1, -1])
+                return tf.transpose(FUN_ACT(tf.nn.xw_plus_b(tf.transpose(res_vecs), W_sum, biases_sum)))
             elif self.backend == 'CNN':
                 raise Exception('CNN backend not implemented yet')
             elif self.backend == 'LSTM':
