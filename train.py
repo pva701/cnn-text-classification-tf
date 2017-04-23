@@ -1,4 +1,5 @@
 #! /usr/bin/env python3
+#import sys
 #sys.path.append('/nfs/home/iperesadin/github/text-classification-tf')
 
 import time
@@ -157,7 +158,7 @@ with tf.Graph().as_default():
         elif FLAGS.processing_algo == "TREE-LSTM":
             processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size, subtree_lstm.SubtreeLstm())
         elif FLAGS.processing_algo == "TOP-K":
-            processing_algo = subtree_top_k.SubtreeTopK(4, 128, 'SUM')
+            processing_algo = subtree_top_k.SubtreeTopK(6, 128, 'CNN', num_filters=128)
         else:
             raise Exception('Unknown processing algo')
 
