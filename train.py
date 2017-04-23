@@ -162,7 +162,7 @@ with tf.Graph().as_default():
         elif FLAGS.processing_algo == "TREE-LSTM":
             processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size, subtree_lstm.SubtreeLstm())
         elif FLAGS.processing_algo == "TOP-K":
-            processing_algo = subtree_top_k.SubtreeTopK(6, backend='CNN', num_filters=128)
+            processing_algo = subtree_top_k.SubtreeTopK(6, backend='LSTM', lstm_hidden=200)
         else:
             raise Exception('Unknown processing algo')
 

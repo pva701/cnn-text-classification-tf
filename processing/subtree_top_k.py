@@ -2,36 +2,31 @@ __author__ = 'pva701'
 
 import tensorflow as tf
 import utils as tfu
+from tensorflow.contrib import rnn
 
 FUN_ACT = tf.sigmoid
 
 
 class SubtreeTopK:
-    def __init__(self, k, leaf_size=None, backend=None, num_filters=None, filter_sizes=None):
+    def __init__(self, k, leaf_size=None, backend=None, num_filters=None, filter_sizes=None, lstm_hidden=None):
         self.k = k
         self.leaf_size = leaf_size
         self.backend = backend
         self.num_filters = num_filters
         self.filter_sizes = filter_sizes
+        self.lstm_hidden = lstm_hidden
         if self.backend != 'SUM' and self.backend != 'CNN' and self.backend != 'LSTM':
             raise Exception('Unexpected SubtreeInnerTopK backend')
 
     def init_with_scope(self, in_size):
         self.in_size = in_size
-        with tf.variable_scope("subtree-top-k"):
-            self.real_in_size = self.leaf_size or self.in_size
-
+        with tf.variable_scope("subtree-top-k") as scope:
             if self.backend == 'SUM':
                 tfu.linear(self.k, 1, "sum")
-                if self.leaf_size:
-                    tfu.linear(in_size, self.leaf_size, "top")
             elif self.backend == 'CNN':
                 if self.filter_sizes is None:
                     self.filter_sizes = [self.k]
                 self.leaf_size = self.output_vector_size()
-                self.real_in_size = self.leaf_size
-                tfu.linear(in_size, self.leaf_size, "top")
-
                 for i, filter_size in enumerate(self.filter_sizes):
                     with tf.name_scope("conv-maxpool-{}".format(filter_size)):
                         # Convolution Layer
@@ -40,10 +35,21 @@ class SubtreeTopK:
                                             initializer=tf.truncated_normal_initializer(stddev=0.1))
                         b = tf.get_variable("b_conv_{}".format(filter_size), [self.num_filters],
                                             initializer=tf.constant_initializer(0.1))
+            elif self.backend == 'LSTM':
+                self.leaf_size = self.lstm_hidden
+                self.cell = rnn.BasicLSTMCell(self.lstm_hidden)
+                self.initial_state = self.cell.zero_state(1, tf.float32)
+                state = self.initial_state
+                self.cell(tf.zeros([1, self.leaf_size]), state, scope)
+
+            self.real_in_size = self.leaf_size or self.in_size
+            if self.leaf_size:
+                tfu.linear(in_size, self.leaf_size, "top")
 
     def build_graph(self, n_words, words_vecs, _1, _2, _3, _4, euler, euler_l, euler_r, dropout_keep):
         with tf.variable_scope("subtree-top-k") as scope:
             scope.reuse_variables()
+
             if self.leaf_size:
                 W_top = tf.get_variable("W_top")
                 biases_top = tf.get_variable("biases_top")
@@ -68,6 +74,7 @@ class SubtreeTopK:
             vec_len = tf.reduce_sum(tf.square(extended_subtree_vecs), 1)
             _, indices = tf.nn.top_k(vec_len, self.k, False, "top-vectors")
             res_vecs = tf.gather(extended_subtree_vecs, indices)
+
             if self.backend == 'SUM':
                 W_sum = tf.get_variable("W_sum")
                 biases_sum = tf.get_variable("biases_sum")
@@ -100,13 +107,19 @@ class SubtreeTopK:
                 pooled_flat = tf.reshape(conc_pooled, [-1, num_filters_total])
                 return pooled_flat
             elif self.backend == 'LSTM':
-                raise Exception('LSTM backend not implemented yet')
+                state = self.initial_state
+                for i in range(self.k):
+                    output, state = self.cell(tf.expand_dims(res_vecs[i], 0), state, scope)
+                return output
+
 
     def output_vector_size(self):
         if self.backend == 'SUM':
             return self.leaf_size or self.in_size
         elif self.backend == 'CNN':
             return self.num_filters * len(self.filter_sizes)
+        elif self.backend == 'LSTM':
+            return self.lstm_hidden
 
     def l2_loss(self):
         return tf.constant(0.0)
