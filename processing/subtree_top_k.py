@@ -1,7 +1,7 @@
 __author__ = 'pva701'
 
 import tensorflow as tf
-import tf_utils as tfu
+import utils as tfu
 
 FUN_ACT = tf.sigmoid
 

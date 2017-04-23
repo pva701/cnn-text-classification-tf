@@ -17,6 +17,9 @@ from train_helpers import *
 from processing import tree_lstm, tree_simple, subtree_top_k
 from outer import subtree_lstm
 import minibatch
+from utils import get_git_revision_hash
+
+print("Current git commit:", get_git_revision_hash())
 
 model_parameters = {"dataset_embedding_path",
                     "exclude_leaves_loss",
@@ -50,6 +53,7 @@ if not os.path.exists(checkpoint_dir):
 
 descr_file = os.path.join(out_dir, 'descr-' + str(timestamp) + '.txt')
 with open(descr_file, 'w+') as out:
+    out.write("Current git commit: " + str(get_git_revision_hash()) + "\n")
     for attr, value in sorted(FLAGS.__flags.items()):
         out.write("{}={}\n".format(attr.upper(), value))
 
