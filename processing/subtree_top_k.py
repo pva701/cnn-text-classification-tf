@@ -21,13 +21,16 @@ class SubtreeTopK:
         with tf.variable_scope("subtree-top-k"):
             self.real_in_size = self.leaf_size or self.in_size
 
-            if self.leaf_size:
-                tfu.linear(in_size, self.leaf_size, "top")
             if self.backend == 'SUM':
                 tfu.linear(self.k, 1, "sum")
+                if self.leaf_size:
+                    tfu.linear(in_size, self.leaf_size, "top")
             elif self.backend == 'CNN':
                 if self.filter_sizes is None:
                     self.filter_sizes = [self.k]
+                self.leaf_size = self.output_vector_size()
+                self.real_in_size = self.leaf_size
+                tfu.linear(in_size, self.leaf_size, "top")
 
                 for i, filter_size in enumerate(self.filter_sizes):
                     with tf.name_scope("conv-maxpool-{}".format(filter_size)):
