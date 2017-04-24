@@ -12,7 +12,8 @@ class SubtreeTopK:
                  backend=None,
                  num_filters=None,
                  filter_sizes=None,
-                 lstm_hidden=None):
+                 lstm_hidden=None,
+                 symbiosis_real_consider=False):
         self.k = k
         self.mode = mode
         self.leaf_size = leaf_size
@@ -20,6 +21,7 @@ class SubtreeTopK:
         self.num_filters = num_filters
         self.filter_sizes = filter_sizes
         self.lstm_hidden = lstm_hidden
+        self.symbiosis_real_consider = symbiosis_real_consider
         if self.backend != 'SUM' and self.backend != 'CNN' and self.backend != 'LSTM':
             raise Exception('Unexpected SubtreeInnerTopK backend')
 
@@ -50,25 +52,47 @@ class SubtreeTopK:
                     self.leaf_size = self.lstm_hidden if self.mode == 'processing' else None
                     self.cell, self.initial_state = tfu.create_lstm(self.lstm_hidden, self.leaf_size or self.in_size, scope)
 
-                if self.mode == 'processing':
-                    self.real_in_size = self.leaf_size or self.in_size
-                    if self.leaf_size:
-                        tfu.linear(in_size, self.leaf_size, "top")
-                else:
-                    self.real_in_size = self.in_size
+            if self.mode == 'processing':
+                self.real_in_size = self.leaf_size or self.in_size
+                if self.leaf_size:
+                    tfu.linear(in_size, self.leaf_size, "top")
+            elif self.mode == 'outer':
+                self.real_in_size = self.in_size
+            elif self.mode == 'symbiosis':
+                self.real_in_size = self.in_size
+                tfu.linear(in_size, self.lstm_hidden, "top")
 
             with tf.variable_scope("weights_vectors") as scope:
-                self.cell_w, self.initial_state_w = tfu.create_lstm(self.lstm_hidden, self.in_size, scope)
+                if self.symbiosis_real_consider:
+                    self.cell_w, self.initial_state_w = tfu.create_lstm(self.lstm_hidden, self.in_size + self.lstm_hidden, scope)
+                else:
+                    self.cell_w, self.initial_state_w = tfu.create_lstm(self.lstm_hidden, self.in_size, scope)
 
 
     def __symbiosis_build_graph(self, n_words, _0, out_repr, _1, _2, _3, _4,
                                 euler, euler_l, euler_r, dropout_keep):
-        def apply_leaf(i):
-            r, w = self.subtree_fn(tf.expand_dims(out_repr[i], 0),
-                                   tf.zeros([0, self.lstm_hidden]))
-            return tf.concat([r, w], 0)
 
+        if self.symbiosis_real_consider:
+            with tf.variable_scope(self.var_scope) as scope:
+                scope.reuse_variables()
+
+                W_top = tf.get_variable("W_top")
+                biases_top = tf.get_variable("biases_top")
+                leaves_weig = tf.nn.tanh(tf.nn.xw_plus_b(out_repr, W_top, biases_top))
+
+            def apply_leaf(i):
+                r, w = self.subtree_fn(tf.expand_dims(out_repr[i], 0),
+                                       tf.expand_dims(leaves_weig[i], 0))
+                return tf.concat([r, w], 0)
+
+        else:
+            def apply_leaf(i):
+                r, w = self.subtree_fn(tf.expand_dims(out_repr[i], 0),
+                                       tf.zeros([0, self.lstm_hidden]))
+                return tf.concat([r, w], 0)
         leaves_vectors = tf.map_fn(apply_leaf, tf.range(0, n_words), dtype=tf.float32)
+
+
 
         def apply_inner(vectors, i):
             weig = tf.gather(vectors, euler[euler_l[i]:euler_r[i] - 1])[:, self.output_vector_size(): ]
@@ -134,7 +158,13 @@ class SubtreeTopK:
 
                 with tf.variable_scope("weights_vectors") as scope:
                     scope.reuse_variables()
-                    weights_result = self.__apply_weight_backend(real_slice, scope)
+                    if self.symbiosis_real_consider:
+                        weig_slice = tf.gather(extended_weights_vecs, indices)
+                        weights_result = self.__apply_weight_backend(tf.concat([real_slice, weig_slice], 1),
+                                                                     scope)
+                    else:
+                        weights_result = self.__apply_weight_backend(real_slice, scope)
+
                 return real_result, weights_result
 
     def __apply_real_backend(self, vecs, backend, scope):
