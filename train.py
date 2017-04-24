@@ -171,7 +171,7 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=subtree_top_k.SubtreeTopK(6, mode='outer',
+            outer_algo=subtree_top_k.SubtreeTopK(6, mode='symbiosis',
                                                  backend='LSTM',
                                                  num_filters=128,
                                                  lstm_hidden=200),
