@@ -19,7 +19,7 @@ from outer import subtree_lstm
 import minibatch
 from utils import get_git_revision_hash
 
-print("Current git commit:", get_git_revision_hash())
+print("Current git commit:", get_git_revision_hash().decode('ascii'))
 
 model_parameters = {"dataset_embedding_path",
                     "exclude_leaves_loss",
@@ -53,7 +53,7 @@ if not os.path.exists(checkpoint_dir):
 
 descr_file = os.path.join(out_dir, 'descr-' + str(timestamp) + '.txt')
 with open(descr_file, 'w+') as out:
-    out.write("Current git commit: " + str(get_git_revision_hash()) + "\n")
+    out.write("Current git commit: " + get_git_revision_hash().decode('ascii') + "\n")
     for attr, value in sorted(FLAGS.__flags.items()):
         out.write("{}={}\n".format(attr.upper(), value))
 
@@ -162,7 +162,7 @@ with tf.Graph().as_default():
         elif FLAGS.processing_algo == "TREE-LSTM":
             processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size)#, subtree_lstm.SubtreeLstm())
         elif FLAGS.processing_algo == "TOP-K":
-            processing_algo = subtree_top_k.SubtreeTopK(4, backend='LSTM', lstm_hidden=200)
+            processing_algo = subtree_top_k.SubtreeTopK(6, backend='LSTM', lstm_hidden=200)
         else:
             raise Exception('Unknown processing algo')
 
@@ -172,7 +172,9 @@ with tf.Graph().as_default():
             window_algo=window_algo,
             processing_algo=processing_algo,
             outer_algo=subtree_top_k.SubtreeTopK(6, mode='outer',
-                                                 backend='LSTM', lstm_hidden=200),
+                                                 backend='LSTM',
+                                                 num_filters=128,
+                                                 lstm_hidden=200),
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,

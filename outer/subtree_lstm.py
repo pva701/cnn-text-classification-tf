@@ -2,17 +2,15 @@ __author__ = 'pva701'
 
 import tensorflow as tf
 from tensorflow.contrib import rnn
-
+import utils as tfu
 
 class SubtreeLstm:
     def init_with_scope(self, hidden_size, in_size):
         self.hidden_size = hidden_size
         self.in_size = in_size
         with tf.variable_scope("subtree-lstm") as scope:
-            self.cell = rnn.BasicLSTMCell(self.hidden_size)
-            self.initial_state = self.cell.zero_state(1, tf.float32)
-            state = self.initial_state
-            self.cell(tf.zeros([1, in_size + hidden_size]), state, scope)
+            self.cell, self.initial_state = \
+                tfu.create_lstm(self.hidden_size, in_size + hidden_size, scope)
 
     def fn(self, init_state, word_vecs, sub_n_words, dropout_keep_prob):
         with tf.variable_scope("subtree-lstm") as scope:

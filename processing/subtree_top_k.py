@@ -41,21 +41,10 @@ class SubtreeTopK:
                 if self.filter_sizes is None:
                     self.filter_sizes = [self.k]
                 self.leaf_size = self.output_vector_size() if self.mode == 'processing' else None
-                for i, filter_size in enumerate(self.filter_sizes):
-                    with tf.name_scope("conv-maxpool-{}".format(filter_size)):
-                        # Convolution Layer
-                        filter_shape = [filter_size, self.real_in_size, 1, self.num_filters]
-                        W = tf.get_variable("W_conv_{}".format(filter_size), filter_shape,
-                                            initializer=tf.truncated_normal_initializer(stddev=0.1))
-                        b = tf.get_variable("b_conv_{}".format(filter_size), [self.num_filters],
-                                            initializer=tf.constant_initializer(0.1))
+                tfu.create_cnn(self.filter_sizes, self.num_filters, self.leaf_size or self.in_size)
             elif self.backend == 'LSTM':
                 self.leaf_size = self.lstm_hidden if self.mode == 'processing' else None
-                self.cell = rnn.BasicLSTMCell(self.lstm_hidden)
-                self.initial_state = self.cell.zero_state(1, tf.float32)
-                state = self.initial_state
-                self.cell(tf.zeros([1, self.leaf_size or self.in_size]),
-                          state, scope)
+                self.cell, self.initial_state = tfu.create_lstm(self.lstm_hidden, self.leaf_size or self.in_size, scope)
 
             if self.mode == 'processing':
                 self.real_in_size = self.leaf_size or self.in_size
@@ -105,36 +94,14 @@ class SubtreeTopK:
                 biases_sum = tf.get_variable("biases_sum")
                 return tf.transpose(FUN_ACT(tf.nn.xw_plus_b(tf.transpose(res_vecs), W_sum, biases_sum)))
             elif self.backend == 'CNN':
-                pooled_outputs = []
-                for i, filter_size in enumerate(self.filter_sizes):
-                    with tf.name_scope("conv-maxpool-{}".format(filter_size)):
-                        W = tf.get_variable("W_conv_{}".format(filter_size))
-                        b = tf.get_variable("b_conv_{}".format(filter_size))
-                        conv = tf.nn.conv2d(tf.expand_dims(tf.expand_dims(res_vecs, 0), -1),
-                                            W,
-                                            strides=[1, 1, 1, 1],
-                                            padding="VALID",
-                                            name="conv")
-                        # Apply nonlinearity
-                        h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
-
-                        # Maxpooling over the outputs
-                        pooled = tf.nn.max_pool(
-                            h,
-                            ksize=[1, self.k - filter_size + 1, 1, 1],
-                            strides=[1, 1, 1, 1],
-                            padding='VALID',
-                            name="pool")
-                        pooled_outputs.append(pooled)
-
-                num_filters_total = self.num_filters * len(self.filter_sizes)
-                conc_pooled = tf.concat(pooled_outputs, 3)
-                pooled_flat = tf.reshape(conc_pooled, [num_filters_total])
-                return pooled_flat
+                return tfu.pass_cnn(self.filter_sizes,
+                                    self.num_filters,
+                                    res_vecs,
+                                    self.real_in_size,
+                                    seq_len=self.k,
+                                    use_padding=False)
             elif self.backend == 'LSTM':
-                state = self.initial_state
-                for i in range(self.k):
-                    output, state = self.cell(tf.expand_dims(res_vecs[i], 0), state, scope)
+                output, _ = tfu.pass_static_lstm(self.cell, self.initial_state, self.k, res_vecs, scope)
                 return tf.reshape(output, [self.lstm_hidden])
 
     def output_vector_size(self):
