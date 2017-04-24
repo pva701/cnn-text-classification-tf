@@ -71,25 +71,10 @@ class TreeSimple:
                                        biases_rec)
                 return tf.concat([vectors, vector], 0)
 
-            raw_vectors = tf.foldl(apply_children,
-                           tf.range(tf.constant(0), n_words - 1),
-                           initializer=leaves_vectors)
-
-            if self.subtree_fun:
-                def apply_subtree_fun(i):
-                    vector = raw_vectors[i + n_words]
-                    l_b = l_bound[i]
-                    r_b = r_bound[i]
-                    return self.subtree_fun.fn(vector, words_vecs[l_b:r_b], r_b - l_b, dropout_keep_prob)
-
-
-                inner_vectors = tf.map_fn(
-                    apply_subtree_fun,
-                    tf.range(tf.constant(0), n_words - 1),
-                    dtype=tf.float32)
-                ret_vectors = tf.concat([raw_vectors[:n_words], inner_vectors], 0)
-            else:
-                ret_vectors = raw_vectors
+            ret_vectors = tf.foldl(
+                apply_children,
+                tf.range(0, n_words - 1),
+                initializer=leaves_vectors)
 
             # Add dropout
             with tf.name_scope("dropout"):

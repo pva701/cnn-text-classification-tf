@@ -28,7 +28,7 @@ class TreeBased:
             window_vector_size = window_algo.output_vector_size()
             processing_algo.init_with_scope(window_vector_size)
             processed_vector_size = processing_algo.output_vector_size()
-            outer_algo.init_with_scope(processed_vector_size)
+            outer_algo.init_with_scope(window_vector_size, processed_vector_size)
             outer_vector_size = outer_algo.output_vector_size()
 
             # Final (unnormalized) scores and predictions
@@ -110,7 +110,7 @@ class TreeBased:
 
             if self.outer_algo:
                 outer_vectors = self.outer_algo.build_graph(
-                        n_words, windows_repr, raw_out_repr, left, right,
+                        raw_out_repr, windows_repr, n_words, left, right,
                         l_bound, r_bound,
                         euler, euler_l, euler_r,
                         self.dropout_keep_prob)

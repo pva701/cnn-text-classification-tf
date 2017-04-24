@@ -36,10 +36,9 @@ class SubtreeTopK:
 
         self.var_scope = "subtree-top-k-{}".format(self.mode)
 
-    def init_with_scope(self, in_size):
-        self.in_size = in_size
+    def init_with_scope(self, window_vec_size, processed_vec_size):
+        self.in_size = processed_vec_size
         with tf.variable_scope(self.var_scope):
-
             with tf.variable_scope("real_vectors") as scope:
                 if self.backend == 'SUM':
                     tfu.linear(self.k, 1, "sum")
@@ -50,17 +49,18 @@ class SubtreeTopK:
                     tfu.create_cnn(self.filter_sizes, self.num_filters, self.leaf_size or self.in_size)
                 elif self.backend == 'LSTM':
                     self.leaf_size = self.lstm_hidden if self.mode == 'processing' else None
-                    self.cell, self.initial_state = tfu.create_lstm(self.lstm_hidden, self.leaf_size or self.in_size, scope)
+                    self.cell, self.initial_state = \
+                        tfu.create_lstm(self.lstm_hidden, self.leaf_size or self.in_size, scope)
 
             if self.mode == 'processing':
                 self.real_in_size = self.leaf_size or self.in_size
                 if self.leaf_size:
-                    tfu.linear(in_size, self.leaf_size, "top")
+                    tfu.linear(self.in_size, self.leaf_size, "top")
             elif self.mode == 'outer':
                 self.real_in_size = self.in_size
             elif self.mode == 'symbiosis':
                 self.real_in_size = self.in_size
-                tfu.linear(in_size, self.lstm_hidden, "top")
+                tfu.linear(self.in_size, self.lstm_hidden, "top")
 
             with tf.variable_scope("weights_vectors") as scope:
                 if self.symbiosis_real_consider:
@@ -69,7 +69,7 @@ class SubtreeTopK:
                     self.cell_w, self.initial_state_w = tfu.create_lstm(self.lstm_hidden, self.in_size, scope)
 
 
-    def __symbiosis_build_graph(self, n_words, _0, out_repr, _1, _2, _3, _4,
+    def __symbiosis_build_graph(self, out_repr, _0, n_words,_1, _2, _3, _4,
                                 euler, euler_l, euler_r, dropout_keep):
 
         if self.symbiosis_real_consider:
@@ -106,7 +106,7 @@ class SubtreeTopK:
 
         return all_vectors[:, :self.output_vector_size()]
 
-    def __outer_build_graph(self, n_words, _0, out_repr, _1, _2, _3, _4,
+    def __outer_build_graph(self, out_repr, _0, n_words, _1, _2, _3, _4,
                             euler, euler_l, euler_r, dropout_keep):
         leaves_vectors = tf.map_fn(lambda v: self.subtree_fn(tf.expand_dims(v, 0)), out_repr[:n_words],
                                    dtype=tf.float32)

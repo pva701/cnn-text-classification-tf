@@ -14,8 +14,11 @@ from flags.train_flags import FLAGS
 import pytreebank
 from window import lstm_window, cnn_window, dummy_window
 from train_helpers import *
-from processing import tree_lstm, tree_simple, subtree_top_k
-from outer import subtree_lstm
+from processing.tree_lstm import TreeLstm
+from processing.tree_simple import TreeSimple
+from processing.subtree_top_k import SubtreeTopK
+from outer.subtree_lstm import SubtreeLstm
+from outer.outer_composition import OuterComposition
 import minibatch
 from utils import get_git_revision_hash
 
@@ -158,11 +161,11 @@ with tf.Graph().as_default():
             raise Exception('Unknown window algo')
 
         if FLAGS.processing_algo == "SIMPLE":
-            processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size) #, subtree_lstm.SubtreeLstm())
+            processing_algo = TreeSimple(FLAGS.recursive_size)
         elif FLAGS.processing_algo == "TREE-LSTM":
-            processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size)#, subtree_lstm.SubtreeLstm())
+            processing_algo = TreeLstm(FLAGS.mem_size)
         elif FLAGS.processing_algo == "TOP-K":
-            processing_algo = subtree_top_k.SubtreeTopK(6, backend='LSTM', lstm_hidden=200)
+            processing_algo = SubtreeTopK(6, backend='LSTM', lstm_hidden=200)
         else:
             raise Exception('Unknown processing algo')
 
@@ -171,11 +174,15 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=subtree_top_k.SubtreeTopK(4, mode='symbiosis',
-                                                 backend='LSTM',
-                                                 num_filters=128,
-                                                 lstm_hidden=150,
-                                                 symbiosis_real_consider=False),
+            outer_algo=OuterComposition([
+                SubtreeLstm(),
+                SubtreeTopK(4,
+                            mode='symbiosis',
+                            backend='LSTM',
+                            num_filters=128,
+                            lstm_hidden=150,
+                            symbiosis_real_consider=False)
+            ]),
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
