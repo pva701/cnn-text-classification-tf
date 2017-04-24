@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-
+import utils as tfu
 
 class TreeBased:
     def init_tree_based(self,
@@ -8,6 +8,7 @@ class TreeBased:
                         vocab_size,
                         window_algo,
                         processing_algo,
+                        outer_algo,
                         embedding_size=None,
                         pretrained_embedding=None):
         with tf.variable_scope("internal-state"):
@@ -27,18 +28,17 @@ class TreeBased:
             window_vector_size = window_algo.output_vector_size()
             processing_algo.init_with_scope(window_vector_size)
             processed_vector_size = processing_algo.output_vector_size()
+            outer_algo.init_with_scope(processed_vector_size)
+            outer_vector_size = outer_algo.output_vector_size()
 
             # Final (unnormalized) scores and predictions
             with tf.name_scope("output"):
-                W = tf.get_variable("W_out",
-                                    shape=[processed_vector_size, num_classes],
-                                    initializer=tf.contrib.layers.xavier_initializer())
-                biases = tf.get_variable("biases_out", [num_classes], initializer=tf.zeros_initializer())
+                tfu.linear(processed_vector_size + outer_vector_size, num_classes, "out")
 
     def __init__(self,
                  is_binary,
                  vocab_size,
-                 window_algo, processing_algo,
+                 window_algo, processing_algo, outer_algo,
                  exclude_leaves_loss,
                  embedding_size=None,
                  pretrained_embedding=None,
@@ -50,14 +50,15 @@ class TreeBased:
             num_classes = 5
 
         self.init_tree_based(num_classes, vocab_size,
-                                     window_algo, processing_algo,
-                                     embedding_size, pretrained_embedding)
+                             window_algo, processing_algo, outer_algo,
+                             embedding_size, pretrained_embedding)
 
         self.window_algo = window_algo
         self.processing_algo = processing_algo
         self.exclude_leaves_loss = exclude_leaves_loss
         self.is_binary = is_binary
         self.l2_reg_lambda = l2_reg_lambda
+        self.outer_algo = outer_algo
 
     def init_before_minibatch(self, w, nw, l, r, lbound, rbound, lb,
                               euler, euler_l, euler_r, bi, d):
@@ -66,7 +67,7 @@ class TreeBased:
         self.left, \
         self.right, \
         self.l_bound, \
-        self.r_bound,\
+        self.r_bound, \
         self.labels, \
         self.euler, \
         self.euler_l, \
@@ -88,7 +89,7 @@ class TreeBased:
         euler_l = self.euler_l[i][:2 * n_words - 1]
         euler_r = self.euler_r[i][:2 * n_words - 1]
         binary_ids = None
-        #binary_ids = self.binary_ids[i][:n_words]
+        # binary_ids = self.binary_ids[i][:n_words]
 
         with tf.variable_scope("internal-state") as scope:
             scope.reuse_variables()
@@ -100,17 +101,23 @@ class TreeBased:
             windows_repr = self.window_algo.build_graph(embedded_vectors, n_words, self.dropout_keep_prob)
 
             # Processing here
-            out_repr_with_leaves = \
+            raw_out_repr = \
                 self.processing_algo.build_graph(
                     n_words, windows_repr, left, right,
                     l_bound, r_bound,
                     euler, euler_l, euler_r,
                     self.dropout_keep_prob)
 
-            # if self.top_k_algo:
-            #     #tf.concat([], 1)
-            #     out_repr_with_leaves = self.top_k_algo.build_graph(n_words, embedded_vectors, )
+            if self.outer_algo:
+                outer_vectors = self.outer_algo.build_graph(
+                        n_words, windows_repr, raw_out_repr, left, right,
+                        l_bound, r_bound,
+                        euler, euler_l, euler_r,
+                        self.dropout_keep_prob)
 
+                out_repr_with_leaves = tf.concat([raw_out_repr, outer_vectors], 1)
+            else:
+                out_repr_with_leaves = raw_out_repr
 
             if not self.exclude_leaves_loss:
                 out_repr = out_repr_with_leaves
@@ -162,9 +169,9 @@ class TreeBased:
 
             root_accuracy = \
                 tf.cast(tf.equal(predictions[-1],
-                         tf.argmax(labels[-1], axis=0),
-                         name="root_accuracy"),
-                "float")
+                                 tf.argmax(labels[-1], axis=0),
+                                 name="root_accuracy"),
+                        "float")
             accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
         return tf.stack([loss, root_loss, accuracy, root_accuracy])
 

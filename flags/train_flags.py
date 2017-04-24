@@ -11,8 +11,8 @@ tf.flags.DEFINE_string("dataset_embedding_path",
                        #"./data/stanford_sentiment_treebank/glove.pickle",
                        "Path to word embedding for current dataset")
 tf.flags.DEFINE_string("embedding_path",
-                       #"./data/word2vec/GoogleNews-vectors-negative300.bin",
-                       "./data/glove/glove.840B.300d.txt",
+                       "./data/word2vec/GoogleNews-vectors-negative300.bin",
+                       #"./data/glove/glove.840B.300d.txt",
                        "Path to word embedding")
 tf.flags.DEFINE_string("sst_path",
                        "./data/stanford_sentiment_treebank",
@@ -25,7 +25,7 @@ tf.flags.DEFINE_boolean("exclude_leaves_loss", False, "Exclude leaves loss from 
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
 tf.flags.DEFINE_string("window_algo", "CNN", "Specify window algo: CNN|LSTM|DUMMY")
-tf.flags.DEFINE_string("processing_algo", "TOP-K", "Specify processing algo: SIMPLE|TREE-LSTM")
+tf.flags.DEFINE_string("processing_algo", "TREE-LSTM", "Specify processing algo: SIMPLE|TREE-LSTM|TOP-K")
 tf.flags.DEFINE_integer("mem_size", 150,
                         "Size of memory and hidden state (for TREE-LSTM")
 

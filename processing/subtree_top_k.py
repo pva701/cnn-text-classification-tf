@@ -6,10 +6,15 @@ from tensorflow.contrib import rnn
 
 FUN_ACT = tf.sigmoid
 
-
 class SubtreeTopK:
-    def __init__(self, k, leaf_size=None, backend=None, num_filters=None, filter_sizes=None, lstm_hidden=None):
+    def __init__(self, k, mode='processing',
+                 leaf_size=None,
+                 backend=None,
+                 num_filters=None,
+                 filter_sizes=None,
+                 lstm_hidden=None):
         self.k = k
+        self.mode = mode
         self.leaf_size = leaf_size
         self.backend = backend
         self.num_filters = num_filters
@@ -18,15 +23,24 @@ class SubtreeTopK:
         if self.backend != 'SUM' and self.backend != 'CNN' and self.backend != 'LSTM':
             raise Exception('Unexpected SubtreeInnerTopK backend')
 
+        if mode == 'processing':
+            self.build_graph = self.__processing_build_graph
+        elif mode == 'outer':
+            self.build_graph = self.__outer_build_graph
+        else:
+            raise Exception('Mda')
+
+        self.var_scope = "subtree-top-k-{}".format(self.mode)
+
     def init_with_scope(self, in_size):
         self.in_size = in_size
-        with tf.variable_scope("subtree-top-k") as scope:
+        with tf.variable_scope(self.var_scope) as scope:
             if self.backend == 'SUM':
                 tfu.linear(self.k, 1, "sum")
             elif self.backend == 'CNN':
                 if self.filter_sizes is None:
                     self.filter_sizes = [self.k]
-                self.leaf_size = self.output_vector_size()
+                self.leaf_size = self.output_vector_size() if self.mode == 'processing' else None
                 for i, filter_size in enumerate(self.filter_sizes):
                     with tf.name_scope("conv-maxpool-{}".format(filter_size)):
                         # Convolution Layer
@@ -36,18 +50,31 @@ class SubtreeTopK:
                         b = tf.get_variable("b_conv_{}".format(filter_size), [self.num_filters],
                                             initializer=tf.constant_initializer(0.1))
             elif self.backend == 'LSTM':
-                self.leaf_size = self.lstm_hidden
+                self.leaf_size = self.lstm_hidden if self.mode == 'processing' else None
                 self.cell = rnn.BasicLSTMCell(self.lstm_hidden)
                 self.initial_state = self.cell.zero_state(1, tf.float32)
                 state = self.initial_state
-                self.cell(tf.zeros([1, self.leaf_size]), state, scope)
+                self.cell(tf.zeros([1, self.leaf_size or self.in_size]),
+                          state, scope)
 
-            self.real_in_size = self.leaf_size or self.in_size
-            if self.leaf_size:
-                tfu.linear(in_size, self.leaf_size, "top")
+            if self.mode == 'processing':
+                self.real_in_size = self.leaf_size or self.in_size
+                if self.leaf_size:
+                    tfu.linear(in_size, self.leaf_size, "top")
+            else:
+                self.real_in_size = self.in_size
 
-    def build_graph(self, n_words, words_vecs, _1, _2, _3, _4, euler, euler_l, euler_r, dropout_keep):
-        with tf.variable_scope("subtree-top-k") as scope:
+    def __outer_build_graph(self, n_words, _0, out_repr, _1, _2, _3, _4, euler, euler_l, euler_r, dropout_keep):
+        leaves_vectors = tf.map_fn(lambda v: self.subtree_fn(tf.expand_dims(v, 0)), out_repr[:n_words],
+                                   dtype=tf.float32)
+
+        inner_vectors = tf.map_fn(lambda i: self.subtree_fn(tf.gather(out_repr, euler[euler_l[i]:euler_r[i] - 1])),
+                                  tf.range(0, n_words - 1), dtype=tf.float32)
+
+        return tf.concat([leaves_vectors, inner_vectors], 0)
+
+    def __processing_build_graph(self, n_words, words_vecs, _1, _2, _3, _4, euler, euler_l, euler_r, dropout_keep):
+        with tf.variable_scope(self.var_scope) as scope:
             scope.reuse_variables()
 
             if self.leaf_size:
@@ -60,15 +87,13 @@ class SubtreeTopK:
 
             def apply_top_k(vectors, i):
                 nodes_vec = tf.gather(vectors, euler[euler_l[i]:euler_r[i] - 1])
-                top_k_vec = self.subtree_fn(nodes_vec)
+                top_k_vec = tf.expand_dims(self.subtree_fn(nodes_vec), 0)
                 return tf.concat([vectors, top_k_vec], 0)
 
-        return tf.foldl(apply_top_k,
-                        tf.range(0, n_words - 1),
-                        initializer=leaves_vectors)
+        return tf.foldl(apply_top_k, tf.range(0, n_words - 1), initializer=leaves_vectors)
 
     def subtree_fn(self, subtree_vecs):
-        with tf.variable_scope("subtree-top-k") as scope:
+        with tf.variable_scope(self.var_scope) as scope:
             scope.reuse_variables()
             extended_subtree_vecs = tf.concat([subtree_vecs, tf.zeros([self.k, self.real_in_size])], 0)
             vec_len = tf.reduce_sum(tf.square(extended_subtree_vecs), 1)
@@ -86,10 +111,10 @@ class SubtreeTopK:
                         W = tf.get_variable("W_conv_{}".format(filter_size))
                         b = tf.get_variable("b_conv_{}".format(filter_size))
                         conv = tf.nn.conv2d(tf.expand_dims(tf.expand_dims(res_vecs, 0), -1),
-                            W,
-                            strides=[1, 1, 1, 1],
-                            padding="VALID",
-                            name="conv")
+                                            W,
+                                            strides=[1, 1, 1, 1],
+                                            padding="VALID",
+                                            name="conv")
                         # Apply nonlinearity
                         h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
 
@@ -104,18 +129,17 @@ class SubtreeTopK:
 
                 num_filters_total = self.num_filters * len(self.filter_sizes)
                 conc_pooled = tf.concat(pooled_outputs, 3)
-                pooled_flat = tf.reshape(conc_pooled, [-1, num_filters_total])
+                pooled_flat = tf.reshape(conc_pooled, [num_filters_total])
                 return pooled_flat
             elif self.backend == 'LSTM':
                 state = self.initial_state
                 for i in range(self.k):
                     output, state = self.cell(tf.expand_dims(res_vecs[i], 0), state, scope)
-                return output
-
+                return tf.reshape(output, [self.lstm_hidden])
 
     def output_vector_size(self):
         if self.backend == 'SUM':
-            return self.leaf_size or self.in_size
+            return self.real_in_size
         elif self.backend == 'CNN':
             return self.num_filters * len(self.filter_sizes)
         elif self.backend == 'LSTM':

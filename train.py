@@ -158,11 +158,11 @@ with tf.Graph().as_default():
             raise Exception('Unknown window algo')
 
         if FLAGS.processing_algo == "SIMPLE":
-            processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size, subtree_lstm.SubtreeLstm())
+            processing_algo = tree_simple.TreeSimple(FLAGS.recursive_size) #, subtree_lstm.SubtreeLstm())
         elif FLAGS.processing_algo == "TREE-LSTM":
-            processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size, subtree_lstm.SubtreeLstm())
+            processing_algo = tree_lstm.TreeLstm(FLAGS.mem_size)#, subtree_lstm.SubtreeLstm())
         elif FLAGS.processing_algo == "TOP-K":
-            processing_algo = subtree_top_k.SubtreeTopK(6, backend='LSTM', lstm_hidden=200)
+            processing_algo = subtree_top_k.SubtreeTopK(4, backend='LSTM', lstm_hidden=200)
         else:
             raise Exception('Unknown processing algo')
 
@@ -171,8 +171,9 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
+            outer_algo=subtree_top_k.SubtreeTopK(6, mode='outer',
+                                                 backend='LSTM', lstm_hidden=200),
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
-            #top_k_algo=
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,
             l2_reg_lambda=FLAGS.l2_reg_lambda)

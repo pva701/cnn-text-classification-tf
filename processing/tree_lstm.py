@@ -36,7 +36,8 @@ class TreeLstm:
 
                 self._create_linear("u_l", mem_size, mem_size)
                 self._create_linear("u_r", mem_size, mem_size)
-            self.subtree_fun.init_with_scope(mem_size, in_size)
+            if self.subtree_fun != None:
+                self.subtree_fun.init_with_scope(mem_size, in_size)
 
     def _gate(self, name, lh, rh):
         W_l = tf.get_variable("W_" + name + "_l")
