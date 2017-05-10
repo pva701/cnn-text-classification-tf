@@ -28,12 +28,16 @@ class TreeBased:
             window_vector_size = window_algo.output_vector_size()
             processing_algo.init_with_scope(window_vector_size)
             processed_vector_size = processing_algo.output_vector_size()
-            outer_algo.init_with_scope(window_vector_size, processed_vector_size)
-            outer_vector_size = outer_algo.output_vector_size()
+            if outer_algo:
+                outer_algo.init_with_scope(window_vector_size, processed_vector_size)
+                outer_vector_size = outer_algo.output_vector_size()
+            else:
+                outer_vector_size = processed_vector_size
 
             # Final (unnormalized) scores and predictions
             with tf.name_scope("output"):
-                tfu.linear(processed_vector_size + outer_vector_size, num_classes, "out")
+                #tfu.linear(processed_vector_size + outer_vector_size, num_classes, "out")
+                tfu.linear(outer_vector_size, num_classes, "out")
 
     def __init__(self,
                  is_binary,

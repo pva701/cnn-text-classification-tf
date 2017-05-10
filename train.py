@@ -4,6 +4,7 @@
 
 import time
 import random
+import sys
 
 import numpy as np
 from tensorflow.contrib import learn
@@ -136,6 +137,11 @@ x_test = apply_hyperparameters(x_test)
 n = len(x_train)
 print("Hyper-parameters setting to trees finished")
 
+win_sizes_bounds = list(map(int, FLAGS.filter_sizes.split(",")))
+if len(win_sizes_bounds) != 2:
+    print("Wrong win size")
+    sys.exit(-1)
+
 # Training
 # ==================================================
 with tf.Graph().as_default():
@@ -147,14 +153,17 @@ with tf.Graph().as_default():
         real_embedding_size = FLAGS.embedding_dim if FLAGS.embedding_dim else word2vec_matrix.shape[1]
 
         if FLAGS.window_algo == "CNN":
+            win_sizes = [x for x in range(win_sizes_bounds[0], win_sizes_bounds[1] + 1)]
             window_algo = cnn_window.CnnWindow(
-                filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
+                filter_sizes=win_sizes,
                 num_filters=FLAGS.num_filters,
                 embedding_size=real_embedding_size)
         elif FLAGS.window_algo == "LSTM":
             window_algo = lstm_window.LstmWindow(
                 hidden_size=FLAGS.lstm_hidden,
-                embedded_size=real_embedding_size)
+                embedded_size=real_embedding_size,
+                min_window_size=win_sizes_bounds[0],
+                max_window_size=win_sizes_bounds[1])
         elif FLAGS.window_algo == "DUMMY":
             window_algo = dummy_window.DummyWindow(real_embedding_size)
         else:
@@ -174,15 +183,16 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=OuterComposition([
-                SubtreeLstm(),
-                SubtreeTopK(4,
-                            mode='symbiosis',
-                            backend='LSTM',
-                            num_filters=128,
-                            lstm_hidden=150,
-                            symbiosis_real_consider=False)
-            ]),
+            outer_algo=None,
+            # outer_algo=OuterComposition([
+            #     SubtreeLstm(),
+            #     SubtreeTopK(4,
+            #                 mode='symbiosis',
+            #                 backend='LSTM',
+            #                 num_filters=128,
+            #                 lstm_hidden=150,
+            #                 symbiosis_real_consider=False)
+            # ]),
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             embedding_size=FLAGS.embedding_dim,
             pretrained_embedding=word2vec_matrix,

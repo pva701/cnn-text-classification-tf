@@ -34,7 +34,8 @@ class TreeSimple:
                 "biases_rec",
                 [recursive_size],
                 initializer=tf.zeros_initializer())
-            self.subtree_fun.init_with_scope(self.recursive_size or self.in_size, in_size)
+            if self.subtree_fun:
+                self.subtree_fun.init_with_scope(self.recursive_size or self.in_size, in_size)
 
     def __init__(self, recursive_size, subtree_fun=None):
         self.recursive_size = recursive_size

@@ -5,7 +5,7 @@ import tensorflow as tf
 class LstmWindow:
 
 
-    def __init__(self, hidden_size, embedded_size, min_window_size=2, max_window_size=4):
+    def __init__(self, hidden_size, embedded_size, min_window_size, max_window_size):
         self.hidden_size = hidden_size
         self.window_bounds = (min_window_size, max_window_size)
         self.embedded_size = embedded_size
