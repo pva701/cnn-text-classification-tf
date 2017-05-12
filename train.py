@@ -63,7 +63,6 @@ with open(descr_file, 'w+') as out:
         out.write("{}={}\n".format(attr.upper(), value))
 
 print("Exclude leaves loss:", FLAGS.exclude_leaves_loss)
-print("Consider only root labels:", FLAGS.consider_only_root)
 
 # Load data
 print("Loading data...")
@@ -107,6 +106,41 @@ elif FLAGS.task == "SUBJ":
     x_test = read_split('test')
 
     num_classes = 2
+    consider_only_root = True
+elif FLAGS.task == "TREC":
+    def load_samples(file):
+        classes = {'NUM': 0,
+                   'LOC': 1,
+                   'DESC': 2,
+                   'HUM': 3,
+                   'ENTY': 4,
+                   'ABBR': 5
+                   }
+        ret = []
+        with open(os.path.join(FLAGS.dataset_path, file + '.txt')) as raw,\
+             open(os.path.join(FLAGS.dataset_path, 'sents_' + file + '.toks')) as toks,\
+             open(os.path.join(FLAGS.dataset_path, 'sents_' + file + '.cparents')) as pars:
+            for r, (t, p) in zip(raw, zip(toks, pars)):
+                pos = r.find(':')
+                lab = classes[r[:pos]]
+
+                p = list(map(int, p.split(" ")))
+                t = t.split(" ")
+                words = (len(p) + 1) // 2
+                assert words == len(t)
+                ln = len(p)
+                labs = [0] * ln
+                for j in range(0, ln):
+                    if p[j] == 0: labs[j] = lab
+
+                ret.append(treelstm.read_tree(p, labs, t))
+        return ret
+
+    x_train = load_samples('train')
+    x_dev = load_samples('test')
+    x_test = load_samples('test')
+
+    num_classes=6
     consider_only_root = True
 else:
     raise Exception('Unexpected task')

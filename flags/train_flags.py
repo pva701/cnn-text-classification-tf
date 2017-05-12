@@ -14,15 +14,14 @@ tf.flags.DEFINE_string("embedding_path",
                        #"./data/glove/glove.840B.300d.txt",
                        "Path to word embedding")
 
-tf.flags.DEFINE_string("task", "SUBJ", "Specify solved task SST-1|SUBJ")
+tf.flags.DEFINE_string("task", "TREC", "Specify solved task SST-1|SUBJ|TREC")
 tf.flags.DEFINE_string("dataset_path",
-                       "./data/subj",
+                       "./data/trec",
                        "Path to dataset of task")
 
 
 # Model Hyperparameters
 tf.flags.DEFINE_boolean("exclude_leaves_loss", False, "Exclude leaves loss from minimization")
-tf.flags.DEFINE_boolean("consider_only_root", False, "Consider only root of tree")
 
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
