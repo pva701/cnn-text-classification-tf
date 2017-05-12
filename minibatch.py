@@ -17,7 +17,6 @@ class MinibatchOptimizer:
         self.euler = tf.placeholder(tf.int32, [None, None])
         self.euler_l = tf.placeholder(tf.int32, [None, None])
         self.euler_r = tf.placeholder(tf.int32, [None, None])
-        # self.binary_ids = tf.placeholder(tf.int32, [None, None], "binary_ids")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
         what.init_before_minibatch(

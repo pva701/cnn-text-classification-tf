@@ -19,7 +19,7 @@ except Exception:
 class SampleDescriptor:
     def __init__(self, words_id, left, right,
                        l_bound, r_bound, labels,
-                       euler, euler_l, euler_r, binary_ids):
+                       euler, euler_l, euler_r):
         self.words = words_id
         self.left = left
         self.right = right
@@ -53,8 +53,8 @@ class LabeledTree(object):
         self.is_binary_task = False
         self.exclude_leaves_loss = False
 
-    def set_hyperparameters(self, bin_task, exl_leaves):
-        self.is_binary_task = bin_task
+    def set_hyperparameters(self, num_classes, exl_leaves):
+        self.num_classes = num_classes
         self.exclude_leaves_loss = exl_leaves
 
     def uproot(tree):
@@ -148,18 +148,9 @@ class LabeledTree(object):
         words = self.to_words()
         return " ".join(words)
 
-    def __create_labels(self, node, binary_ids):
-        if self.is_binary_task:
-            l = [0, 0]
-            if node.label < 2:
-                l[0] = 1
-            elif node.label > 2:
-                l[1] = 1
-            if node.label != 2:
-               binary_ids.append(self.vert_num)
-        else:
-            l = [0] * 5
-            l[node.label] = 1
+    def __create_labels(self, node):
+        l = [0] * self.num_classes
+        l[node.label] = 1
         return l
 
     def to_sample(self, vocab):
@@ -176,7 +167,6 @@ class LabeledTree(object):
         euler = []
         euler_l = [None] * (n - 1)
         euler_r = [None] * (n - 1)
-        binary_ids = []
 
         self.list_num = 0
         self.vert_num = n
@@ -189,7 +179,7 @@ class LabeledTree(object):
                     words_id[self.list_num] = 0
 
                 if not self.exclude_leaves_loss:
-                    labels[self.list_num] = self.__create_labels(node, binary_ids)
+                    labels[self.list_num] = self.__create_labels(node)
 
                 euler.append(self.list_num)
 
@@ -216,7 +206,7 @@ class LabeledTree(object):
                 left.append(l_n)
                 right.append(r_n)
 
-                labels[self.vert_num] = self.__create_labels(node, binary_ids)
+                labels[self.vert_num] = self.__create_labels(node)
 
                 self.vert_num += 1
                 return self.vert_num - 1
@@ -231,8 +221,7 @@ class LabeledTree(object):
         self.sample = \
             SampleDescriptor(words_id, left, right,
                              l_bound, r_bound, labels,
-                             euler, euler_l, euler_r,
-                             binary_ids)
+                             euler, euler_l, euler_r)
         return self.sample
 
     def __str__(self):

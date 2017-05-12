@@ -40,18 +40,14 @@ class TreeBased:
                 tfu.linear(outer_vector_size, num_classes, "out")
 
     def __init__(self,
-                 is_binary,
+                 num_classes,
                  vocab_size,
                  window_algo, processing_algo, outer_algo,
+                 consider_only_root,
                  exclude_leaves_loss,
                  embedding_size=None,
                  pretrained_embedding=None,
                  l2_reg_lambda=0.0):
-
-        if is_binary:
-            num_classes = 2
-        else:
-            num_classes = 5
 
         self.init_tree_based(num_classes, vocab_size,
                              window_algo, processing_algo, outer_algo,
@@ -60,7 +56,7 @@ class TreeBased:
         self.window_algo = window_algo
         self.processing_algo = processing_algo
         self.exclude_leaves_loss = exclude_leaves_loss
-        self.is_binary = is_binary
+        self.consider_only_root = consider_only_root
         self.l2_reg_lambda = l2_reg_lambda
         self.outer_algo = outer_algo
 
@@ -92,8 +88,6 @@ class TreeBased:
         euler = self.euler[i][:2 * n_words - 1]
         euler_l = self.euler_l[i][:2 * n_words - 1]
         euler_r = self.euler_r[i][:2 * n_words - 1]
-        binary_ids = None
-        # binary_ids = self.binary_ids[i][:n_words]
 
         with tf.variable_scope("internal-state") as scope:
             scope.reuse_variables()
@@ -128,9 +122,9 @@ class TreeBased:
             else:
                 out_repr = out_repr_with_leaves[n_words:]
 
-            return self.__build_loss_accuracy(out_repr, labels, binary_ids)
+            return self.__build_loss_accuracy(out_repr, labels)
 
-    def __build_loss_accuracy(self, vrs, labels, binary_ids):
+    def __build_loss_accuracy(self, vrs, labels):
         # Calculate Mean cross-entropy loss
         with tf.name_scope("loss"):
             W_out = tf.get_variable("W_out")
@@ -139,18 +133,11 @@ class TreeBased:
             scores = tf.nn.xw_plus_b(vrs, W_out, biases_out, name="scores")
             predictions = tf.argmax(scores, 1, name="predictions")
 
-            if self.is_binary:
-                losses = \
-                    tf.nn.softmax_cross_entropy_with_logits(
-                        labels=tf.gather(labels, binary_ids),
-                        logits=tf.gather(scores, binary_ids),
-                        name="losses")
-            else:
-                losses = \
-                    tf.nn.softmax_cross_entropy_with_logits(
-                        labels=labels,
-                        logits=scores,
-                        name="losses")
+            losses = \
+                tf.nn.softmax_cross_entropy_with_logits(
+                    labels=labels,
+                    logits=scores,
+                    name="losses")
 
             root_loss = \
                 tf.nn.softmax_cross_entropy_with_logits(
@@ -158,15 +145,16 @@ class TreeBased:
                     logits=scores[-1],
                     name="root_loss")
 
-            loss = tf.reduce_sum(losses)
+            if self.consider_only_root:
+                loss = tf.reduce_sum(losses[-1])
+            else:
+                loss = tf.reduce_sum(losses)
 
         # Accuracy
         with tf.name_scope("accuracy"):
-            if self.is_binary:
+            if self.consider_only_root:
                 correct_predictions = \
-                    tf.equal(
-                        tf.gather(predictions, binary_ids),
-                        tf.argmax(tf.gather(labels, binary_ids), 1))
+                    tf.equal(predictions[-1], tf.argmax(labels[-1], 0))
             else:
                 correct_predictions = \
                     tf.equal(predictions, tf.argmax(labels, 1))

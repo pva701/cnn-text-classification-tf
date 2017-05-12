@@ -51,20 +51,10 @@ def create_batch_placeholder(batch, vocab_dict):
     euler_r = [populate(max_len - 1, e) for e in euler_r]
     return n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r
 
-def train_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, dropout_k):
-    # if is_binary:
-    #     if binary_ids[-1] == 2 * len(x) - 2:
-    #         root_valid = True
-    #     else:
-    #         root_valid = False
-    # else:
-    #     binary_ids = []
-    #     root_valid = True
-
+def train_batch(batch, optimizer, vocab_dict, sess, global_step, dropout_k):
     root_valid = True
     n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r = \
         create_batch_placeholder(batch, vocab_dict)
-
     feed_dict = {
         optimizer.batch_size: len(batch),
         optimizer.words: words,
@@ -77,7 +67,6 @@ def train_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, drop
         optimizer.euler: euler,
         optimizer.euler_l: euler_l,
         optimizer.euler_r: euler_r,
-        # optimizer.binary_ids: binary_ids,
         optimizer.dropout_keep_prob: dropout_k
     }
     _, _, result = sess.run(
@@ -94,16 +83,7 @@ def train_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, drop
     return loss, accuracy, None, None
 
 
-def dev_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, summary):
-    # if is_binary:
-    #     if binary_ids[-1] == 2 * len(x) - 2:
-    #         root_valid = True
-    #     else:
-    #         root_valid = False
-    # else:
-    #     binary_ids = []
-    #     root_valid = True
-
+def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
     root_valid = True
     n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r = \
         create_batch_placeholder(batch, vocab_dict)
@@ -120,7 +100,6 @@ def dev_batch(batch, optimizer, vocab_dict, is_binary, sess, global_step, summar
         optimizer.euler: euler,
         optimizer.euler_l: euler_l,
         optimizer.euler_r: euler_r,
-        # optimizer.binary_ids: binary_ids,
         optimizer.dropout_keep_prob: 1.0
     }
 
