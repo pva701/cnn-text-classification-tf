@@ -249,7 +249,7 @@ with tf.Graph().as_default():
         elif FLAGS.processing_algo == "TOP-K":
             processing_algo = SubtreeTopK(6,
                                           backend='CNN',
-                                          w_backend='CNN',
+                                          w_backend='LSTM',
                                           num_filters=128,
                                           lstm_hidden=200)
         else:
@@ -259,7 +259,7 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=None,
+            outer_algo=SubtreeLstm(),
             # outer_algo=
             #     SubtreeTopK(4,
             #                 mode='symbiosis',

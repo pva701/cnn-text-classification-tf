@@ -14,9 +14,9 @@ tf.flags.DEFINE_string("embedding_path",
                        #"./data/glove/glove.840B.300d.txt",
                        "Path to word embedding")
 
-tf.flags.DEFINE_string("task", "TREC", "Specify solved task SST-1|SUBJ|TREC")
+tf.flags.DEFINE_string("task", "SUBJ", "Specify solved task SST-1|SUBJ|TREC")
 tf.flags.DEFINE_string("dataset_path",
-                       "./data/trec",
+                       "./data/subj",
                        "Path to dataset of task")
 
 
@@ -26,7 +26,7 @@ tf.flags.DEFINE_boolean("exclude_leaves_loss", False, "Exclude leaves loss from 
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
 tf.flags.DEFINE_string("window_algo", "CNN", "Specify window algo: CNN|LSTM|DUMMY")
-tf.flags.DEFINE_string("processing_algo", "TOP-K", "Specify processing algo: SIMPLE|TREE-LSTM|TOP-K")
+tf.flags.DEFINE_string("processing_algo", "TREE-LSTM", "Specify processing algo: SIMPLE|TREE-LSTM|TOP-K")
 tf.flags.DEFINE_integer("mem_size", 150,
                         "Size of memory and hidden state (for TREE-LSTM")
 
@@ -49,7 +49,7 @@ tf.flags.DEFINE_integer("minibatch", 25, "Minibatch size")
 tf.flags.DEFINE_integer("num_epochs", 2000, "Number of training epochs (default: 200)")
 tf.flags.DEFINE_integer("evaluate_every", 80, "Evaluate model on dev set after this many steps")
 tf.flags.DEFINE_integer("checkpoint_every", 160, "Save model after this many steps")
-tf.flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store (default: 5)")
+tf.flags.DEFINE_integer("num_checkpoints", 1, "Number of checkpoints to store (default: 5)")
 
 # Misc Parameters
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
