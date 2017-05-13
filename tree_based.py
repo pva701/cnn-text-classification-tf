@@ -36,8 +36,10 @@ class TreeBased:
 
             # Final (unnormalized) scores and predictions
             with tf.name_scope("output"):
-                #tfu.linear(processed_vector_size + outer_vector_size, num_classes, "out")
-                tfu.linear(outer_vector_size, num_classes, "out")
+                if outer_algo:
+                    tfu.linear(processed_vector_size + outer_vector_size, num_classes, "out")
+                else:
+                    tfu.linear(outer_vector_size, num_classes, "out")
 
     def __init__(self,
                  num_classes,

@@ -10,20 +10,26 @@ class SubtreeTopK:
     def __init__(self, k, mode='processing',
                  leaf_size=None,
                  backend=None,
+                 w_backend=None,
                  num_filters=None,
-                 filter_sizes=None,
                  lstm_hidden=None,
-                 symbiosis_real_consider=False):
+                 consider_weights_in_weights=False):
         self.k = k
         self.mode = mode
         self.leaf_size = leaf_size
-        self.backend = backend
+        self.real_backend = backend
+        self.weight_backend = w_backend
+        self.weight_backend = w_backend
         self.num_filters = num_filters
-        self.filter_sizes = filter_sizes
         self.lstm_hidden = lstm_hidden
-        self.symbiosis_real_consider = symbiosis_real_consider
-        if self.backend != 'SUM' and self.backend != 'CNN' and self.backend != 'LSTM':
+        self.consider_weight_in_weight = consider_weights_in_weights
+        self.filter_sizes = [self.k]
+
+        if self.real_backend != 'SUM' and self.real_backend != 'CNN' and self.real_backend != 'LSTM':
             raise Exception('Unexpected SubtreeInnerTopK backend')
+
+        if self.weight_backend != 'LSTM' and self.weight_backend != 'CNN':
+            raise Exception('Unexpected weight backend')
 
         if mode == 'processing':
             self.build_graph = self.__processing_build_graph
@@ -32,7 +38,7 @@ class SubtreeTopK:
         elif mode == 'symbiosis':
             self.build_graph = self.__symbiosis_build_graph
         else:
-            raise Exception('Mda')
+            raise Exception('Unexpected mode')
 
         self.var_scope = "subtree-top-k-{}".format(self.mode)
 
@@ -40,17 +46,22 @@ class SubtreeTopK:
         self.in_size = processed_vec_size
         with tf.variable_scope(self.var_scope):
             with tf.variable_scope("real_vectors") as scope:
-                if self.backend == 'SUM':
+                if self.real_backend == 'SUM':
                     tfu.linear(self.k, 1, "sum")
-                elif self.backend == 'CNN':
-                    if self.filter_sizes is None:
-                        self.filter_sizes = [self.k]
+                elif self.real_backend == 'CNN':
                     self.leaf_size = self.output_vector_size() if self.mode == 'processing' else None
                     tfu.create_cnn(self.filter_sizes, self.num_filters, self.leaf_size or self.in_size)
-                elif self.backend == 'LSTM':
+                elif self.real_backend == 'LSTM':
                     self.leaf_size = self.lstm_hidden if self.mode == 'processing' else None
                     self.cell, self.initial_state = \
                         tfu.create_lstm(self.lstm_hidden, self.leaf_size or self.in_size, scope)
+
+            if self.weight_backend == 'LSTM':
+                self.weight_out_size = self.lstm_hidden
+            elif self.weight_backend == 'CNN':
+                self.weight_out_size = self.num_filters * len(self.filter_sizes)
+            else:
+                raise Exception('Unexpected weight backend')
 
             if self.mode == 'processing':
                 self.real_in_size = self.leaf_size or self.in_size
@@ -60,19 +71,24 @@ class SubtreeTopK:
                 self.real_in_size = self.in_size
             elif self.mode == 'symbiosis':
                 self.real_in_size = self.in_size
-                tfu.linear(self.in_size, self.lstm_hidden, "top")
+                tfu.linear(self.in_size, self.weight_out_size, "top")
 
             with tf.variable_scope("weights_vectors") as scope:
-                if self.symbiosis_real_consider:
-                    self.cell_w, self.initial_state_w = tfu.create_lstm(self.lstm_hidden, self.in_size + self.lstm_hidden, scope)
+                if self.consider_weight_in_weight:
+                    if self.weight_backend == 'LSTM':
+                        self.cell_w, self.initial_state_w = tfu.create_lstm(self.lstm_hidden, self.in_size + self.weight_out_size, scope)
+                    elif self.weight_backend == 'CNN':
+                        tfu.create_cnn(self.filter_sizes, self.num_filters, self.in_size + self.weight_out_size)
                 else:
-                    self.cell_w, self.initial_state_w = tfu.create_lstm(self.lstm_hidden, self.in_size, scope)
-
+                    if self.weight_backend == 'LSTM':
+                        self.cell_w, self.initial_state_w = tfu.create_lstm(self.lstm_hidden, self.in_size, scope)
+                    elif self.weight_backend == 'CNN':
+                        tfu.create_cnn(self.filter_sizes, self.num_filters, self.in_size)
 
     def __symbiosis_build_graph(self, out_repr, _0, n_words,_1, _2, _3, _4,
                                 euler, euler_l, euler_r, dropout_keep):
 
-        if self.symbiosis_real_consider:
+        if self.consider_weight_in_weight:
             with tf.variable_scope(self.var_scope) as scope:
                 scope.reuse_variables()
 
@@ -88,7 +104,7 @@ class SubtreeTopK:
         else:
             def apply_leaf(i):
                 r, w = self.subtree_fn(tf.expand_dims(out_repr[i], 0),
-                                       tf.zeros([0, self.lstm_hidden]))
+                                       tf.zeros([0, self.weight_out_size]))
                 return tf.concat([r, w], 0)
         leaves_vectors = tf.map_fn(apply_leaf, tf.range(0, n_words), dtype=tf.float32)
 
@@ -144,26 +160,29 @@ class SubtreeTopK:
 
                 with tf.variable_scope("real_vectors") as scope:
                     scope.reuse_variables()
-                    return self.__apply_real_backend(tf.gather(extended_real_vecs, indices), self.backend, scope)
+                    return self.__apply_real_backend(tf.gather(extended_real_vecs, indices), self.real_backend, scope)
             else:
                 extended_real_vecs = tf.concat([real_vecs, tf.zeros([self.k, self.real_in_size])], 0)
-                extended_weights_vecs = tf.concat([weights_vecs, tf.zeros([self.k, self.lstm_hidden])], 0)
+                extended_weights_vecs = tf.concat([weights_vecs, tf.zeros([self.k, self.weight_out_size])], 0)
                 max_lengths = tf.reduce_sum(tf.square(extended_weights_vecs), 1)
                 _, indices = tf.nn.top_k(max_lengths, self.k, False, "top-vectors")
 
                 with tf.variable_scope("real_vectors") as scope:
                     scope.reuse_variables()
                     real_slice = tf.gather(extended_real_vecs, indices)
-                    real_result = self.__apply_real_backend(real_slice, self.backend, scope)
+                    real_result = self.__apply_real_backend(real_slice, self.real_backend, scope)
 
                 with tf.variable_scope("weights_vectors") as scope:
                     scope.reuse_variables()
-                    if self.symbiosis_real_consider:
+                    if self.consider_weight_in_weight:
                         weig_slice = tf.gather(extended_weights_vecs, indices)
                         weights_result = self.__apply_weight_backend(tf.concat([real_slice, weig_slice], 1),
+                                                                     self.weight_backend,
                                                                      scope)
                     else:
-                        weights_result = self.__apply_weight_backend(real_slice, scope)
+                        weights_result = self.__apply_weight_backend(real_slice,
+                                                                     self.weight_backend,
+                                                                     scope)
 
                 return real_result, weights_result
 
@@ -184,16 +203,27 @@ class SubtreeTopK:
                 output, _ = tfu.pass_static_lstm(self.cell, self.initial_state, self.k, vecs, scope)
                 return tf.reshape(output, [self.lstm_hidden])
 
-    def __apply_weight_backend(self, vecs, scope):
-        output, _ = tfu.pass_static_lstm(self.cell_w, self.initial_state_w, self.k, vecs, scope)
-        return tf.reshape(output, [self.lstm_hidden])
+    def __apply_weight_backend(self, vecs, backend, scope):
+        if backend == 'CNN':
+            return tfu.pass_cnn(
+                    self.filter_sizes,
+                    self.num_filters,
+                    vecs,
+                    self.real_in_size,
+                    seq_len=self.k,
+                    use_padding=False)
+        elif backend == 'LSTM':
+            output, _ = tfu.pass_static_lstm(self.cell_w, self.initial_state_w, self.k, vecs, scope)
+            return tf.reshape(output, [self.lstm_hidden])
+        else:
+            raise Exception('Unknown weight backend')
 
     def output_vector_size(self):
-        if self.backend == 'SUM':
+        if self.real_backend == 'SUM':
             return self.real_in_size
-        elif self.backend == 'CNN':
+        elif self.real_backend == 'CNN':
             return self.num_filters * len(self.filter_sizes)
-        elif self.backend == 'LSTM':
+        elif self.real_backend == 'LSTM':
             return self.lstm_hidden
 
     def l2_loss(self):

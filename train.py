@@ -256,15 +256,14 @@ with tf.Graph().as_default():
             window_algo=window_algo,
             processing_algo=processing_algo,
             outer_algo=None,
-            # outer_algo=OuterComposition([
-            #     SubtreeLstm(),
+            # outer_algo=
             #     SubtreeTopK(4,
             #                 mode='symbiosis',
-            #                 backend='LSTM',
+            #                 backend='CNN',
+            #                 w_backend='CNN',
             #                 num_filters=128,
             #                 lstm_hidden=150,
-            #                 symbiosis_real_consider=False)
-            # ]),
+            #                 consider_weights_in_weights=False),
             consider_only_root=consider_only_root,
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             embedding_size=FLAGS.embedding_dim,
