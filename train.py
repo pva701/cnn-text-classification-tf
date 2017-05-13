@@ -11,7 +11,7 @@ from tensorflow.contrib import learn
 import data_helpers
 from tree_based import TreeBased
 from flags.train_flags import FLAGS
-import pytreebank
+from dataset_loaders import load_sst, load_subj, load_trec, load_mr
 from window import lstm_window, cnn_window, dummy_window
 from train_helpers import *
 from processing.tree_lstm import TreeLstm
@@ -21,7 +21,6 @@ from outer.subtree_lstm import SubtreeLstm
 from outer.outer_composition import OuterComposition
 import minibatch
 from utils import get_git_revision_hash
-from pytreebank import treelstm
 
 print("Current git commit:", get_git_revision_hash().decode('ascii'))
 
@@ -67,81 +66,21 @@ print("Exclude leaves loss:", FLAGS.exclude_leaves_loss)
 # Load data
 print("Loading data...")
 if FLAGS.task == "SST-1":
-    dataset = pytreebank.load_sst(FLAGS.dataset_path)
-    x_train = [x.lowercase() for x in dataset["train"]]
-    x_dev = [x.lowercase() for x in dataset["dev"]]
-    x_test = [x.lowercase() for x in dataset["test"]]
+    x_train, x_dev, x_test = load_sst(FLAGS.dataset_path)
     num_classes = 5
     consider_only_root = False
 elif FLAGS.task == "SUBJ":
-    with open(os.path.join(FLAGS.dataset_path, 'sents.cparents'), 'r') as pars,\
-         open(os.path.join(FLAGS.dataset_path, 'sents.toks'), 'r') as toks:
-        x_train = []
-        x_dev = []
-        x_test = []
-        pairs = []
-        for x, y in zip(pars, toks):
-            p = list(map(int, x.split(" ")))
-            t = y.split(" ")
-            words = (len(p) + 1) // 2
-            assert words == len(t)
-            pairs.append((p, t))
-
-    def read_split(file):
-        file_path = os.path.join(FLAGS.dataset_path, file + '.split')
-        ret = []
-        with open(file_path, 'r') as f:
-            s = map(int, f.readline().split(" "))
-        for i in s:
-            ln = len(pairs[i][0])
-            lab = [0] * ln
-            for j in range(0, ln):
-                if pairs[i][0][j] == 0:
-                    lab[j] = int(i < 5000)
-            ret.append(treelstm.read_tree(pairs[i][0], lab, pairs[i][1]))
-        return ret
-
-    x_train = read_split('train')
-    x_dev = read_split('dev')
-    x_test = read_split('test')
-
+    x_train, x_dev, x_test = load_subj(FLAGS.dataset_path)
     num_classes = 2
     consider_only_root = True
 elif FLAGS.task == "TREC":
-    def load_samples(file):
-        classes = {'NUM': 0,
-                   'LOC': 1,
-                   'DESC': 2,
-                   'HUM': 3,
-                   'ENTY': 4,
-                   'ABBR': 5
-                   }
-        ret = []
-        with open(os.path.join(FLAGS.dataset_path, file + '.txt')) as raw,\
-             open(os.path.join(FLAGS.dataset_path, 'sents_' + file + '.toks')) as toks,\
-             open(os.path.join(FLAGS.dataset_path, 'sents_' + file + '.cparents')) as pars:
-            for r, (t, p) in zip(raw, zip(toks, pars)):
-                pos = r.find(':')
-                lab = classes[r[:pos]]
-
-                p = list(map(int, p.split(" ")))
-                t = t.split(" ")
-                words = (len(p) + 1) // 2
-                assert words == len(t)
-                ln = len(p)
-                labs = [0] * ln
-                for j in range(0, ln):
-                    if p[j] == 0: labs[j] = lab
-
-                ret.append(treelstm.read_tree(p, labs, t))
-        return ret
-
-    x_train = load_samples('train')
-    x_dev = load_samples('test')
-    x_test = load_samples('test')
-
+    x_train, x_dev, x_test = load_trec(FLAGS.dataset_path)
     num_classes=6
     consider_only_root = True
+elif FLAGS.task == "MR":
+    x_train, x_dev, x_test = load_mr(FLAGS.dataset_path)
+    num_classes=2
+    consider_only_root=True
 else:
     raise Exception('Unexpected task')
 
@@ -259,7 +198,8 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=SubtreeLstm(),
+            outer_algo=None,
+            #outer_algo=SubtreeLstm(),
             # outer_algo=
             #     SubtreeTopK(4,
             #                 mode='symbiosis',
