@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 import sys
-#sys.path.append('/nfs/home/iperesadin/github/text-classification-tf')
+# sys.path.append('/nfs/home/iperesadin/github/text-classification-tf')
 
 import time
 import random
@@ -75,12 +75,12 @@ elif FLAGS.task == "SUBJ":
     consider_only_root = True
 elif FLAGS.task == "TREC":
     x_train, x_dev, x_test = load_trec(FLAGS.dataset_path)
-    num_classes=6
+    num_classes = 6
     consider_only_root = True
 elif FLAGS.task == "MR":
     x_train, x_dev, x_test = load_mr(FLAGS.dataset_path)
-    num_classes=2
-    consider_only_root=True
+    num_classes = 2
+    consider_only_root = True
 else:
     raise Exception('Unexpected task')
 
@@ -128,6 +128,7 @@ if FLAGS.embedding_dim is None:  # use pre-trained
 
 print("Train/Dev/Test split: {:d}/{:d}/{:d}".
       format(len(x_train), len(x_dev), len(x_test)))
+
 
 def apply_hyperparameters(x_data):
     x_ret = []
@@ -198,16 +199,15 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=None,
-            #outer_algo=SubtreeLstm(),
-            # outer_algo=
-            #     SubtreeTopK(4,
-            #                 mode='symbiosis',
-            #                 backend='CNN',
-            #                 w_backend='CNN',
-            #                 num_filters=128,
-            #                 lstm_hidden=150,
-            #                 consider_weights_in_weights=False),
+            outer_algo=OuterComposition([
+                SubtreeTopK(4,
+                            mode='symbiosis',
+                            backend='CNN',
+                            w_backend='CNN',
+                            num_filters=128,
+                            lstm_hidden=150,
+                            consider_weights_in_weights=True),
+                SubtreeLstm()], mode='CONCAT'),
             consider_only_root=consider_only_root,
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             embedding_size=FLAGS.embedding_dim,
@@ -224,9 +224,9 @@ with tf.Graph().as_default():
             optimizer_ = tf.train.AdamOptimizer(0.001)
         else:
             raise Exception('Unknown optimizer')
-        #AdaGrad
-        #AdaDelta
-        #reg_lam=0.0001
+        # AdaGrad
+        # AdaDelta
+        # reg_lam=0.0001
 
         optimizer = minibatch.MinibatchOptimizer(optimizer_, global_step, tree_nn, num_classes)
 
@@ -293,10 +293,12 @@ with tf.Graph().as_default():
 
                 if current_step % FLAGS.evaluate_every == 0:
                     dev_loss, dev_acc, dev_root_loss, dev_root_acc = \
-                        dev_batch(x_dev, optimizer, vocab_dict, sess, global_step, (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
+                        dev_batch(x_dev, optimizer, vocab_dict, sess, global_step,
+                                  (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
 
                     test_loss, test_acc, test_root_loss, test_root_acc = \
-                        dev_batch(x_test, optimizer, vocab_dict, sess, global_step, (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
+                        dev_batch(x_test, optimizer, vocab_dict, sess, global_step,
+                                  (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
 
                     if dev_root_acc > max_dev:
                         max_dev = dev_root_acc
