@@ -14,9 +14,9 @@ class MinibatchOptimizer:
         self.r_bound = tf.placeholder(tf.int32, [None, None], "r_bound")  # n - 1
 
         self.labels = tf.placeholder(tf.int32, [None, None, num_classes], "labels")  # 2n-1x5
-        self.euler = tf.placeholder(tf.int32, [None, None])
-        self.euler_l = tf.placeholder(tf.int32, [None, None])
-        self.euler_r = tf.placeholder(tf.int32, [None, None])
+        self.euler = tf.placeholder(tf.int32, [None, None], "euler")
+        self.euler_l = tf.placeholder(tf.int32, [None, None], "euler_l")
+        self.euler_r = tf.placeholder(tf.int32, [None, None], "euler_r")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
         what.init_before_minibatch(

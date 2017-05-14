@@ -2,7 +2,8 @@ __author__ = 'pva701'
 
 import tensorflow as tf
 import os
-
+from flags.train_flags import FLAGS
+import collections
 
 def create_batch_placeholder(batch, vocab_dict):
     words = []
@@ -84,28 +85,66 @@ def train_batch(batch, optimizer, vocab_dict, sess, global_step, dropout_k):
 
 
 def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
-    root_valid = True
-    n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r = \
-        create_batch_placeholder(batch, vocab_dict)
+    if not FLAGS.with_sent_stat:
+        n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r = \
+            create_batch_placeholder(batch, vocab_dict)
 
-    feed_dict = {
-        optimizer.batch_size: len(batch),
-        optimizer.words: words,
-        optimizer.n_words: n_words,
-        optimizer.left: left,
-        optimizer.right: right,
-        optimizer.l_bound: l_bound,
-        optimizer.r_bound: r_bound,
-        optimizer.labels: labels,
-        optimizer.euler: euler,
-        optimizer.euler_l: euler_l,
-        optimizer.euler_r: euler_r,
-        optimizer.dropout_keep_prob: 1.0
-    }
+        feed_dict = {
+            optimizer.batch_size: len(batch),
+            optimizer.words: words,
+            optimizer.n_words: n_words,
+            optimizer.left: left,
+            optimizer.right: right,
+            optimizer.l_bound: l_bound,
+            optimizer.r_bound: r_bound,
+            optimizer.labels: labels,
+            optimizer.euler: euler,
+            optimizer.euler_l: euler_l,
+            optimizer.euler_r: euler_r,
+            optimizer.dropout_keep_prob: 1.0
+        }
 
-    _, result = sess.run(
-        [global_step, optimizer.result],
-        feed_dict)
+        _, result = sess.run(
+            [global_step, optimizer.result],
+            feed_dict)
+    else:
+        test_examples = 0
+        sum_acc = 0.0
+        result = (0.0, 0.0, 0.0, 0.0)
+        sent_statistic = collections.defaultdict(lambda: 0)
+        sent_total = collections.defaultdict(lambda: 0)
+        g_step = 0
+        for x in batch:
+            s = x.to_sample(vocab_dict)
+            feed_dict = {
+                optimizer.batch_size: 1,
+                optimizer.words: [s.words],
+                optimizer.n_words: [len(s.words)],
+                optimizer.left: [s.left],
+                optimizer.right: [s.right],
+                optimizer.l_bound: [s.l_bound],
+                optimizer.r_bound: [s.r_bound],
+                optimizer.labels: [s.labels],
+                optimizer.euler: [s.euler],
+                optimizer.euler_l: [s.euler_l],
+                optimizer.euler_r: [s.euler_r],
+                optimizer.dropout_keep_prob: 1.0
+            }
+            g_step, loc_result = sess.run([global_step, optimizer.result], feed_dict)
+            result = tuple(x + y for x, y in zip(result, loc_result))
+            sum_acc += loc_result[3]
+            test_examples += 1
+            l = len(s.words)
+            sent_total[l] += 1
+            sent_statistic[l] += loc_result[3]
+        result = tuple(x/test_examples for x in result)
+        with open(os.path.join(FLAGS.outdir, 'sent_stat-{}').format(g_step), 'w') as out:
+            max_len = max(sent_total.values())
+            for l in range(1, max_len + 1):
+                if l in sent_total:
+                    out.write("{} {} {:g}\n".format(l, sent_total[l], sent_statistic[l] / sent_total[l]))
+                else:
+                    out.write("{} 0 0\n".format(l))
 
     loss = result[0]
     root_loss = result[1]
@@ -115,9 +154,7 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
     if summary:
         add_summary(loss, accuracy, root_loss, root_acc, summary)
 
-    if root_valid:
-        return loss, accuracy, root_loss, root_acc
-    return loss, accuracy, None, None
+    return loss, accuracy, root_loss, root_acc
 
 
 def init_summary_writers(sess, out_dir):
@@ -130,35 +167,6 @@ def init_summary_writers(sess, out_dir):
     test_summary_dir = os.path.join(out_dir, "summaries", "test")
     test_summary_writer = tf.summary.FileWriter(test_summary_dir, sess.graph, flush_secs=60)
     return train_summary_writer, dev_summary_writer, test_summary_writer
-
-
-def eval_dataset(x_dataset, evaluator, summary=None):
-    sum_loss = 0.0
-    sum_root_loss = 0.0
-    sum_acc = 0.0
-    sum_root_acc = 0.0
-    examples = 0
-    examples_root = 0
-
-    for ex in x_dataset:
-        l, ac, rl, rac = evaluator(ex)
-        sum_loss += l
-        sum_acc += ac
-        if rl:
-            examples_root += 1
-            sum_root_loss += rl
-            sum_root_acc += rac
-        examples += 1
-
-    sum_loss /= examples
-    sum_acc /= examples
-    sum_root_loss /= examples_root
-    sum_root_acc /= examples_root
-
-    if summary:
-        add_summary(sum_loss, sum_acc, sum_root_loss, sum_root_acc, summary)
-
-    return sum_loss, sum_acc, sum_root_loss, sum_root_acc
 
 
 def add_summary(sum_loss, sum_acc, sum_root_loss, sum_root_acc, summary):

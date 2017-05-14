@@ -46,6 +46,7 @@ print("")
 # Output directory for models and summaries
 timestamp = str(int(time.time()))
 out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
+FLAGS.outdir = out_dir
 print("Writing to {}\n".format(out_dir))
 
 
@@ -199,15 +200,16 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=OuterComposition([
-                SubtreeTopK(4,
-                            mode='symbiosis',
-                            backend='CNN',
-                            w_backend='CNN',
-                            num_filters=128,
-                            lstm_hidden=150,
-                            consider_weights_in_weights=True),
-                SubtreeLstm()], mode='CONCAT'),
+            outer_algo=None,
+            # outer_algo=OuterComposition([
+            #     SubtreeTopK(4,
+            #                 mode='symbiosis',
+            #                 backend='CNN',
+            #                 w_backend='CNN',
+            #                 num_filters=128,
+            #                 lstm_hidden=150,
+            #                 consider_weights_in_weights=True),
+            #     SubtreeLstm()], mode='CONCAT'),
             consider_only_root=consider_only_root,
             exclude_leaves_loss=FLAGS.exclude_leaves_loss,
             embedding_size=FLAGS.embedding_dim,
