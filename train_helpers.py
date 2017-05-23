@@ -1,9 +1,11 @@
 __author__ = 'pva701'
 
 import tensorflow as tf
+import numpy as np
 import os
 from flags.train_flags import FLAGS
 import collections
+from sklearn.metrics import f1_score
 
 def create_batch_placeholder(batch, vocab_dict):
     words = []
@@ -16,6 +18,7 @@ def create_batch_placeholder(batch, vocab_dict):
     euler = []
     euler_l = []
     euler_r = []
+    root_labels = []
 
     max_len = 0
     max_lab = 0
@@ -34,6 +37,7 @@ def create_batch_placeholder(batch, vocab_dict):
         euler.append(x.euler)
         euler_l.append(x.euler_l)
         euler_r.append(x.euler_r)
+        root_labels.append(x.root_label)
 
     def populate(c, v, val=-1):
         ret = [e for e in v]
@@ -50,11 +54,10 @@ def create_batch_placeholder(batch, vocab_dict):
     euler = [populate(2 * max_len - 1, e) for e in euler]
     euler_l = [populate(max_len - 1, e) for e in euler_l]
     euler_r = [populate(max_len - 1, e) for e in euler_r]
-    return n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r
+    return n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r, root_labels
 
 def train_batch(batch, optimizer, vocab_dict, sess, global_step, dropout_k):
-    root_valid = True
-    n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r = \
+    n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r, _ = \
         create_batch_placeholder(batch, vocab_dict)
     feed_dict = {
         optimizer.batch_size: len(batch),
@@ -79,14 +82,12 @@ def train_batch(batch, optimizer, vocab_dict, sess, global_step, dropout_k):
     accuracy = result[2]
     root_acc = result[3]
 
-    if root_valid:
-        return loss, accuracy, root_loss, root_acc
-    return loss, accuracy, None, None
+    return loss, accuracy, root_loss, root_acc
 
 
 def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
     if not FLAGS.with_sent_stat:
-        n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r = \
+        n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r, y_true = \
             create_batch_placeholder(batch, vocab_dict)
 
         feed_dict = {
@@ -104,10 +105,13 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
             optimizer.dropout_keep_prob: 1.0
         }
 
-        _, result = sess.run(
-            [global_step, optimizer.result],
+        _, result, y_pred = sess.run(
+            [global_step, optimizer.result, optimizer.y_p],
             feed_dict)
+        y_pred = [int(x) for x in y_pred]
     else:
+        y_true = []
+        y_pred = []
         test_examples = 0
         sum_acc = 0.0
         result = (0.0, 0.0, 0.0, 0.0)
@@ -116,6 +120,7 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
         g_step = 0
         for x in batch:
             s = x.to_sample(vocab_dict)
+            y_true.append(s.root_label)
             feed_dict = {
                 optimizer.batch_size: 1,
                 optimizer.words: [s.words],
@@ -130,7 +135,8 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
                 optimizer.euler_r: [s.euler_r],
                 optimizer.dropout_keep_prob: 1.0
             }
-            g_step, loc_result = sess.run([global_step, optimizer.result], feed_dict)
+            g_step, loc_result, y_p = sess.run([global_step, optimizer.result, optimizer.y_p], feed_dict)
+            y_pred.append(int(y_p[0]))
             result = tuple(x + y for x, y in zip(result, loc_result))
             sum_acc += loc_result[3]
             test_examples += 1
@@ -150,11 +156,16 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
     root_loss = result[1]
     accuracy = result[2]
     root_acc = result[3]
+    f1_macro = f1_score(y_true, y_pred, average='macro')
+    f1_micro = f1_score(y_true, y_pred, average='micro')
 
     if summary:
-        add_summary(loss, accuracy, root_loss, root_acc, summary)
+        add_summary(loss, accuracy, root_loss, root_acc,
+                    np.float64(f1_macro),
+                    np.float64(f1_micro),
+                    summary)
 
-    return loss, accuracy, root_loss, root_acc
+    return loss, accuracy, root_loss, root_acc, f1_macro, f1_micro
 
 
 def init_summary_writers(sess, out_dir):
@@ -169,7 +180,7 @@ def init_summary_writers(sess, out_dir):
     return train_summary_writer, dev_summary_writer, test_summary_writer
 
 
-def add_summary(sum_loss, sum_acc, sum_root_loss, sum_root_acc, summary):
+def add_summary(sum_loss, sum_acc, sum_root_loss, sum_root_acc, f1_macro, f1_micro, summary):
     writer = summary[0]
     step = summary[1]
     summary_loss = tf.Summary(value=[tf.Summary.Value(tag="loss", simple_value=sum_loss.astype(float)), ])
@@ -178,7 +189,14 @@ def add_summary(sum_loss, sum_acc, sum_root_loss, sum_root_acc, summary):
         value=[tf.Summary.Value(tag="root_loss", simple_value=sum_root_loss.astype(float)), ])
     summary_root_acc = tf.Summary(
         value=[tf.Summary.Value(tag="root_accuracy", simple_value=sum_root_acc.astype(float)), ])
+    summary_macro = tf.Summary(
+        value=[tf.Summary.Value(tag="F1_macro", simple_value=f1_macro.astype(float)), ])
+    summary_micro = tf.Summary(
+        value=[tf.Summary.Value(tag="F1_micro", simple_value=f1_micro.astype(float)), ])
+
     writer.add_summary(summary_loss, step)
     writer.add_summary(summary_acc, step)
     writer.add_summary(summary_root_loss, step)
     writer.add_summary(summary_root_acc, step)
+    writer.add_summary(summary_macro, step)
+    writer.add_summary(summary_micro, step)

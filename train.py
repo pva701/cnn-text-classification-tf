@@ -200,7 +200,8 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=None,
+            outer_algo=SubtreeLstm(),
+            #outer_algo=None,
             # outer_algo=OuterComposition([
             #     SubtreeTopK(4,
             #                 mode='symbiosis',
@@ -284,6 +285,7 @@ with tf.Graph().as_default():
                                 sum_train_acc / TRAIN_MEAS_BATCH,
                                 sum_train_root_loss / root_cnt,
                                 sum_train_root_acc / root_cnt,
+                                np.float64(0.), np.float64(0.),
                                 (train_summary_writer, current_step // TRAIN_MEAS_BATCH))
 
                     root_cnt = 0
@@ -294,11 +296,11 @@ with tf.Graph().as_default():
                     batch_time = time.time()
 
                 if current_step % FLAGS.evaluate_every == 0:
-                    dev_loss, dev_acc, dev_root_loss, dev_root_acc = \
+                    dev_loss, dev_acc, dev_root_loss, dev_root_acc, dev_f1_macro, dev_f1_micro = \
                         dev_batch(x_dev, optimizer, vocab_dict, sess, global_step,
                                   (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
 
-                    test_loss, test_acc, test_root_loss, test_root_acc = \
+                    test_loss, test_acc, test_root_loss, test_root_acc, test_f1_macro, test_f1_micro = \
                         dev_batch(x_test, optimizer, vocab_dict, sess, global_step,
                                   (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
 
@@ -313,6 +315,8 @@ with tf.Graph().as_default():
                           format(max_dev, max_test, dev_iter))
                     print("Test evaluation: loss {:g}, acc {:g}, root_loss {:g}, root_acc {:g}".
                           format(test_loss, test_acc, test_root_loss, test_root_acc))
+                    print("Dev F1: macro {:g}, micro {:g}".format(dev_f1_macro, dev_f1_micro))
+                    print("Test F1: macro {:g}, micro {:g}".format(test_f1_macro, test_f1_micro))
                     print("")
 
                 if current_step % FLAGS.checkpoint_every == 0:

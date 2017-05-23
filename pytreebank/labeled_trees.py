@@ -19,7 +19,8 @@ except Exception:
 class SampleDescriptor:
     def __init__(self, words_id, left, right,
                        l_bound, r_bound, labels,
-                       euler, euler_l, euler_r):
+                       euler, euler_l, euler_r,
+                       root_label):
         self.words = words_id
         self.left = left
         self.right = right
@@ -29,6 +30,7 @@ class SampleDescriptor:
         self.euler = euler
         self.euler_l = euler_l
         self.euler_r = euler_r
+        self.root_label = root_label
 
 class LabeledTree(object):
     SCORE_MAPPING = [-12.5, -6.25, 0.0, 6.25, 12.5]
@@ -221,7 +223,8 @@ class LabeledTree(object):
         self.sample = \
             SampleDescriptor(words_id, left, right,
                              l_bound, r_bound, labels,
-                             euler, euler_l, euler_r)
+                             euler, euler_l, euler_r,
+                             self.label)
         return self.sample
 
     def __str__(self):

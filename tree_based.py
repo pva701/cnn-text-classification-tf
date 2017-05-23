@@ -167,7 +167,11 @@ class TreeBased:
                                  name="root_accuracy"),
                         "float")
             accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
-        return tf.stack([loss, root_loss, accuracy, root_accuracy])
+        return tf.stack([loss,
+                         root_loss,
+                         accuracy,
+                         root_accuracy,
+                         tf.cast(predictions[-1], "float")])
 
     def l2_loss(self):
         with tf.variable_scope("internal-state") as scope:

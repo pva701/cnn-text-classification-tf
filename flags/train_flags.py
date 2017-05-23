@@ -14,9 +14,9 @@ tf.flags.DEFINE_string("embedding_path",
                        #"./data/glove/glove.840B.300d.txt",
                        "Path to word embedding")
 
-tf.flags.DEFINE_string("task", "MR", "Specify solved task SST-1|SUBJ|TREC|MR")
+tf.flags.DEFINE_string("task", "TREC", "Specify solved task SST-1|SUBJ|TREC|MR")
 tf.flags.DEFINE_string("dataset_path",
-                       "./data/mr",
+                       "./data/trec",
                        "Path to dataset of task")
 
 # Model Hyperparameters
@@ -24,15 +24,15 @@ tf.flags.DEFINE_boolean("exclude_leaves_loss", False, "Exclude leaves loss from 
 
 tf.flags.DEFINE_integer("embedding_dim", None,
                         "Dimensionality of character embedding, None for word2vec initialization of embedding")
-tf.flags.DEFINE_string("window_algo", "DUMMY", "Specify window algo: CNN|LSTM|DUMMY")
-tf.flags.DEFINE_string("processing_algo", "SIMPLE", "Specify processing algo: SIMPLE|TREE-LSTM|TOP-K")
+tf.flags.DEFINE_string("window_algo", "CNN", "Specify window algo: CNN|LSTM|DUMMY")
+tf.flags.DEFINE_string("processing_algo", "TREE-LSTM", "Specify processing algo: SIMPLE|TREE-LSTM|TOP-K")
 tf.flags.DEFINE_integer("mem_size", 150,
                         "Size of memory and hidden state (for TREE-LSTM")
 
 tf.flags.DEFINE_integer("recursive_size", None,
                         "Size of sentiment vectors (for SIMPLE processing algo)")
 tf.flags.DEFINE_integer("lstm_hidden", 200, "LSTM hidden size, when use LSTM (for LSTM window)")
-tf.flags.DEFINE_string("filter_sizes", "2",
+tf.flags.DEFINE_string("filter_sizes", "2,4",
                        "Comma-separated window sizes min/max")
 tf.flags.DEFINE_integer("num_filters", 128,
                         "Number of filters per filter size (default: 128) (for CNN window)")

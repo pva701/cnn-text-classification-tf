@@ -25,12 +25,13 @@ class MinibatchOptimizer:
             None,
             self.dropout_keep_prob)
 
-        self.result = tf.reduce_mean(
-            tf.map_fn(
-                lambda i: what.fn(i),
-                tf.range(tf.constant(0), self.batch_size),
-                dtype=tf.float32)
-            , 0)
+        results = tf.map_fn(
+            lambda i: what.fn(i),
+            tf.range(tf.constant(0), self.batch_size),
+            dtype=tf.float32)
+
+        self.y_p = results[:, -1]
+        self.result = tf.reduce_mean(results[:, 0:4], 0)
         loss = self.result[0] + what.l2_loss()
         grads_and_vars = optimizer.compute_gradients(loss)
         self.train_op = optimizer.apply_gradients(grads_and_vars,
