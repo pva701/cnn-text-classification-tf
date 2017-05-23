@@ -27,8 +27,8 @@ def show_algos(algos, out_path):
 
     labels = []
     algo_names = []
-    colors = ['g', 'b']
-    markers = ['^', 'v']
+    colors = ['b', 'm']
+    markers = ['v', '+']
     l = len(colors)
     c = 0
     for algo in algos:
@@ -53,7 +53,7 @@ def show_algos(algos, out_path):
     plt.xlim(xmin=min_x-0.5, xmax=max_x + 1)
 
     plt.xticks(np.arange(min_x, max_x + 1, 2))
-    plt.yticks(np.arange(max(0.0, min_y - 0.05), 1.05, 0.05))
+    plt.yticks(np.arange(max(0.0, min_y - 0.05), 1.00, 0.05))
 
     plt.legend(labels, algo_names, bbox_to_anchor=(0.31, 0.23))
     #plt.show()

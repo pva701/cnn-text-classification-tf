@@ -25,10 +25,10 @@ class MinibatchOptimizer:
             None,
             self.dropout_keep_prob)
 
-        results = tf.map_fn(
+        results, self.vectors = tf.map_fn(
             lambda i: what.fn(i),
             tf.range(tf.constant(0), self.batch_size),
-            dtype=tf.float32)
+            dtype=(tf.float32, tf.float32))
 
         self.y_p = results[:, -1]
         self.result = tf.reduce_mean(results[:, 0:4], 0)

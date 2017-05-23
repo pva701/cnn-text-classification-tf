@@ -13,7 +13,7 @@ from dataset_loaders import load_trec
 # Eval Parameters
 tf.flags.DEFINE_string("task", "TREC", "Task")
 tf.flags.DEFINE_string("dataset_path", "./data/trec", "Dataset path")
-tf.flags.DEFINE_string("checkpoint_dir", "./runs/1494751321/checkpoints/",
+tf.flags.DEFINE_string("checkpoint_dir", "./runs/1495536797/checkpoints/",
                        "Checkpoint directory from training run")
 tf.flags.DEFINE_boolean("eval_train", False, "Evaluate on all training data")
 

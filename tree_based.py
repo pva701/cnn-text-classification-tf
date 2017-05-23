@@ -124,7 +124,7 @@ class TreeBased:
             else:
                 out_repr = out_repr_with_leaves[n_words:]
 
-            return self.__build_loss_accuracy(out_repr, labels)
+            return self.__build_loss_accuracy(out_repr, labels), out_repr[-1]
 
     def __build_loss_accuracy(self, vrs, labels):
         # Calculate Mean cross-entropy loss

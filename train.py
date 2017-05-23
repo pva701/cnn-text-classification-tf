@@ -200,7 +200,8 @@ with tf.Graph().as_default():
             vocab_size=len(vocab_processor.vocabulary_),
             window_algo=window_algo,
             processing_algo=processing_algo,
-            outer_algo=SubtreeLstm(),
+            outer_algo=None,
+            #outer_algo=SubtreeLstm(),
             #outer_algo=None,
             # outer_algo=OuterComposition([
             #     SubtreeTopK(4,
@@ -298,11 +299,11 @@ with tf.Graph().as_default():
                 if current_step % FLAGS.evaluate_every == 0:
                     dev_loss, dev_acc, dev_root_loss, dev_root_acc, dev_f1_macro, dev_f1_micro = \
                         dev_batch(x_dev, optimizer, vocab_dict, sess, global_step,
-                                  (dev_summary_writer, current_step // TRAIN_MEAS_BATCH))
+                                  (dev_summary_writer, current_step // TRAIN_MEAS_BATCH), max_dev)
 
                     test_loss, test_acc, test_root_loss, test_root_acc, test_f1_macro, test_f1_micro = \
                         dev_batch(x_test, optimizer, vocab_dict, sess, global_step,
-                                  (test_summary_writer, current_step // TRAIN_MEAS_BATCH))
+                                  (test_summary_writer, current_step // TRAIN_MEAS_BATCH), max_test)
 
                     if dev_root_acc > max_dev:
                         max_dev = dev_root_acc

@@ -1,11 +1,13 @@
 __author__ = 'pva701'
 
 import tensorflow as tf
+from sklearn.manifold import TSNE
 import numpy as np
 import os
 from flags.train_flags import FLAGS
 import collections
 from sklearn.metrics import f1_score
+import matplotlib.pyplot as plt
 
 def create_batch_placeholder(batch, vocab_dict):
     words = []
@@ -84,8 +86,7 @@ def train_batch(batch, optimizer, vocab_dict, sess, global_step, dropout_k):
 
     return loss, accuracy, root_loss, root_acc
 
-
-def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
+def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary, cur_acc=None):
     if not FLAGS.with_sent_stat:
         n_words, words, left, right, l_bound, r_bound, labels, euler, euler_l, euler_r, y_true = \
             create_batch_placeholder(batch, vocab_dict)
@@ -105,13 +106,14 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
             optimizer.dropout_keep_prob: 1.0
         }
 
-        _, result, y_pred = sess.run(
-            [global_step, optimizer.result, optimizer.y_p],
+        g_step, result, y_pred, v_emb = sess.run(
+            [global_step, optimizer.result, optimizer.y_p, optimizer.vectors],
             feed_dict)
         y_pred = [int(x) for x in y_pred]
     else:
         y_true = []
         y_pred = []
+        v_emb = []
         test_examples = 0
         sum_acc = 0.0
         result = (0.0, 0.0, 0.0, 0.0)
@@ -135,7 +137,11 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
                 optimizer.euler_r: [s.euler_r],
                 optimizer.dropout_keep_prob: 1.0
             }
-            g_step, loc_result, y_p = sess.run([global_step, optimizer.result, optimizer.y_p], feed_dict)
+            g_step, loc_result, y_p, x_emb = \
+                sess.run([global_step, optimizer.result, optimizer.y_p, optimizer.vectors],
+                         feed_dict)
+            print(x_emb.shape)
+            v_emb.append(x_emb)
             y_pred.append(int(y_p[0]))
             result = tuple(x + y for x, y in zip(result, loc_result))
             sum_acc += loc_result[3]
@@ -151,6 +157,7 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
                     out.write("{} {} {:g}\n".format(l, sent_total[l], sent_statistic[l] / sent_total[l]))
                 else:
                     out.write("{} 0 0\n".format(l))
+        v_emb = np.array(v_emb)
 
     loss = result[0]
     root_loss = result[1]
@@ -159,6 +166,14 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
     f1_macro = f1_score(y_true, y_pred, average='macro')
     f1_micro = f1_score(y_true, y_pred, average='micro')
 
+    if root_acc > cur_acc:
+        with open(os.path.join(FLAGS.outdir, 'tse-{}').format(g_step), 'w') as out:
+            for x, y in zip(v_emb, y_true):
+                out.write(str(y))
+                for xi in x:
+                    out.write(" {:g}".format(xi))
+                out.write("\n")
+
     if summary:
         add_summary(loss, accuracy, root_loss, root_acc,
                     np.float64(f1_macro),
@@ -166,7 +181,6 @@ def dev_batch(batch, optimizer, vocab_dict, sess, global_step, summary):
                     summary)
 
     return loss, accuracy, root_loss, root_acc, f1_macro, f1_micro
-
 
 def init_summary_writers(sess, out_dir):
     train_summary_dir = os.path.join(out_dir, "summaries", "train")
